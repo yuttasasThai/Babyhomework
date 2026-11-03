@@ -1,10 +1,10 @@
 # 🌟 Little Hero Chore Quest (ฮีโร่ตัวจิ๋วพิชิตงานบ้าน)
 > เว็บแอปพลิเคชันสำหรับเด็กทำงานบ้าน มีเลือกงานบ้าน กำหนดเวลา เสียงเตือนอัตโนมัติ ถ่ายรูปประทับเวลาจริงบน Canvas และสะสมดาวแลกรางวัล
 
-**Version:** 1.2.0  
-**Revision:** rev-20261103-01  
+**Version:** 1.2.1  
+**Revision:** rev-20261103-02-vercel-fix  
 **Framework:** React 19 + TypeScript + Vite + Tailwind CSS  
-**Target:** รองรับทั้งคอมพิวเตอร์และโทรศัพท์ Android 100%
+**Target:** รองรับทั้งคอมพิวเตอร์และโทรศัพท์ Android 100% (Vercel Ready)
 
 ---
 
