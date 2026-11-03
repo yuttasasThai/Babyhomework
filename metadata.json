@@ -1,0 +1,6 @@
+{
+  "name": "Little Hero Chore Quest - ฮีโร่ตัวจิ๋วพิชิตงานบ้าน",
+  "description": "เว็บแอปพลิเคชันสำหรับเด็กทำงานบ้าน มีเลือกภารกิจ กำหนดเวลา ถ่ายรูปประทับเวลาอัตโนมัติ และสะสมดาว",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
