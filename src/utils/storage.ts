@@ -1,34 +1,20 @@
 import { ChoreLog, ChoreTask, HeroProfile, WishlistReward } from '../types/chore';
 
+// Embedded SVG Data URIs: รูปการ์ตูนฝังในโค้ดโดยตรง รับประกัน 100% ว่าไม่มีวันหาย ไม่ 404 แน่นอน
+const svgAvatar1 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%2338bdf8"/><stop offset="100%" stop-color="%232563eb"/></linearGradient><linearGradient id="helm" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="%23f8fafc"/><stop offset="100%" stop-color="%23cbd5e1"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(%23bg)"/><circle cx="80" cy="88" r="48" fill="%23fde047" opacity="0.3"/><circle cx="80" cy="82" r="38" fill="%23fed7aa"/><circle cx="80" cy="62" r="34" fill="url(%23helm)"/><path d="M48 68 Q80 40 112 68 Z" fill="%2394a3b8"/><circle cx="80" cy="38" r="12" fill="%23f59e0b"/><circle cx="80" cy="38" r="7" fill="%23ef4444"/><ellipse cx="68" cy="82" rx="4.5" ry="5.5" fill="%231e293b"/><ellipse cx="92" cy="82" rx="4.5" ry="5.5" fill="%231e293b"/><circle cx="70" cy="80" r="1.5" fill="%23ffffff"/><circle cx="94" cy="80" r="1.5" fill="%23ffffff"/><path d="M72 94 Q80 102 88 94" stroke="%23ea580c" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="60" cy="90" r="6" fill="%23f43f5e" opacity="0.4"/><circle cx="100" cy="90" r="6" fill="%23f43f5e" opacity="0.4"/><circle cx="120" cy="50" r="10" fill="%23ffffff" opacity="0.7"/><text x="80" y="146" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="12" fill="%23ffffff">🛡️ อัศวินฟองสบู่</text></svg>`;
+const svgAvatar2 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><defs><linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23f472b6"/><stop offset="100%" stop-color="%23e11d48"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(%23bg2)"/><circle cx="80" cy="84" r="46" fill="%23fbcfe8" opacity="0.3"/><circle cx="80" cy="82" r="38" fill="%23fed7aa"/><path d="M42 78 C36 40 124 40 118 78 C124 95 110 112 110 112 L50 112 C50 112 36 95 42 78 Z" fill="%23f59e0b"/><polygon points="80,24 84,34 94,35 86,42 88,52 80,46 72,52 74,42 66,35 76,34" fill="%23fde047"/><ellipse cx="68" cy="84" rx="4.5" ry="6" fill="%231e293b"/><ellipse cx="92" cy="84" rx="4.5" ry="6" fill="%231e293b"/><path d="M73 96 Q80 104 87 96" stroke="%23e11d48" stroke-width="3" stroke-linecap="round" fill="none"/><text x="80" y="146" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="12" fill="%23ffffff">✨ หนูน้อยสตาร์พาวเวอร์</text></svg>`;
+const svgAvatar3 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><defs><linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23f59e0b"/><stop offset="100%" stop-color="%23d97706"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(%23bg3)"/><circle cx="80" cy="80" r="44" fill="%23fef3c7" opacity="0.3"/><circle cx="50" cy="54" r="14" fill="%23b45309"/><circle cx="110" cy="54" r="14" fill="%23b45309"/><circle cx="80" cy="86" r="38" fill="%23fef08a"/><ellipse cx="80" cy="92" rx="18" ry="12" fill="%23ffffff"/><ellipse cx="66" cy="78" rx="4.5" ry="5.5" fill="%231e293b"/><ellipse cx="94" cy="78" rx="4.5" ry="5.5" fill="%231e293b"/><polygon points="80,32 83,40 92,41 85,47 87,55 80,50 73,55 75,47 68,41 77,40" fill="%23ffffff"/><text x="80" y="146" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="12" fill="%23ffffff">⚡ สิงโตนักลาดตระเวน</text></svg>`;
+const svgAvatar4 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><defs><linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%2310b981"/><stop offset="100%" stop-color="%23047857"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(%23bg4)"/><rect x="46" y="52" width="68" height="58" rx="18" fill="%23e2e8f0"/><rect x="52" y="58" width="56" height="42" rx="12" fill="%230f172a"/><circle cx="68" cy="79" r="6" fill="%2338bdf8"/><circle cx="92" cy="79" r="6" fill="%2338bdf8"/><circle cx="80" cy="34" r="6" fill="%23f59e0b"/><text x="80" y="146" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="12" fill="%23ffffff">🌱 หุ่นยนต์ต้นกล้าจิ๋ว</text></svg>`;
+const svgAvatar5 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><defs><linearGradient id="bg5" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%2306b6d4"/><stop offset="100%" stop-color="%230e7490"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(%23bg5)"/><path d="M45 105 C45 60 115 60 115 105 Z" fill="%2386efac"/><ellipse cx="80" cy="76" rx="34" ry="30" fill="%234ade80"/><ellipse cx="70" cy="74" rx="4.5" ry="5.5" fill="%23064e3b"/><ellipse cx="90" cy="74" rx="4.5" ry="5.5" fill="%23064e3b"/><text x="80" y="146" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="12" fill="%23ffffff">🦖 ไดโนจอมขยัน</text></svg>`;
+const svgAvatar6 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><defs><linearGradient id="bg6" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%238b5cf6"/><stop offset="100%" stop-color="%236d28d9"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(%23bg6)"/><circle cx="80" cy="85" r="38" fill="%23ffedd5"/><rect x="52" y="70" width="56" height="16" rx="8" fill="%23f59e0b"/><circle cx="68" cy="78" r="2.5" fill="%231e293b"/><circle cx="92" cy="78" r="2.5" fill="%231e293b"/><text x="80" y="146" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="12" fill="%23ffffff">🐱 กัปตันเหมียวสายตรวจ</text></svg>`;
+
 export const HERO_AVATARS = [
-  {
-    id: 'clean_knight',
-    name: 'อัศวินฟองสบู่',
-    title: 'ผู้พิทักษ์ความสะอาด',
-    image: '/src/assets/images/hero_clean_knight_1793681104404.jpg',
-    color: 'from-blue-500 to-cyan-400',
-  },
-  {
-    id: 'sparkle_girl',
-    name: 'หนูน้อยสตาร์พาวเวอร์',
-    title: 'พลังดวงดาววิบวับ',
-    image: '/src/assets/images/hero_sparkle_girl_1793681104087.jpg',
-    color: 'from-pink-500 to-rose-400',
-  },
-  {
-    id: 'turbo_ranger',
-    name: 'ผู้พิทักษ์สี่ขา',
-    title: 'หน่วยลาดตระเวนบ้าน',
-    image: '/src/assets/images/hero_turbo_ranger_1793681103886.jpg',
-    color: 'from-amber-500 to-yellow-400',
-  },
-  {
-    id: 'sprout_helper',
-    name: 'ฮีโร่สายฟ้าจิ๋ว',
-    title: 'ผู้พิชิตฝุ่นตัวน้อย',
-    image: '/src/assets/images/hero_sprout_helper_1793681102630.jpg',
-    color: 'from-emerald-500 to-teal-400',
-  },
+  { id: 'clean_knight', name: 'อัศวินฟองสบู่', title: 'ผู้พิทักษ์ความสะอาด', image: svgAvatar1, color: 'from-blue-500 to-cyan-400' },
+  { id: 'sparkle_girl', name: 'หนูน้อยสตาร์พาวเวอร์', title: 'พลังดวงดาววิบวับ', image: svgAvatar2, color: 'from-pink-500 to-rose-400' },
+  { id: 'turbo_ranger', name: 'สิงโตนักลาดตระเวน', title: 'ผู้พิทักษ์บ้านแสนสุข', image: svgAvatar3, color: 'from-amber-500 to-yellow-400' },
+  { id: 'sprout_helper', name: 'หุ่นยนต์ต้นกล้าจิ๋ว', title: 'ผู้พิชิตฝุ่นตัวน้อย', image: svgAvatar4, color: 'from-emerald-500 to-teal-400' },
+  { id: 'dino_cleaner', name: 'ไดโนจอมขยัน', title: 'ยอดนักกวาดมือโปร', image: svgAvatar5, color: 'from-cyan-500 to-emerald-400' },
+  { id: 'cat_patrol', name: 'กัปตันเหมียวสายตรวจ', title: 'สายลับกำจัดเชื้อโรค', image: svgAvatar6, color: 'from-purple-500 to-indigo-400' },
 ];
 
 export const PRESET_CHORES = [
@@ -51,17 +37,33 @@ const STORAGE_KEYS = {
   TASKS: 'chore_hero_tasks_v1',
   LOGS: 'chore_hero_logs_v1',
   REWARDS: 'chore_hero_rewards_v1',
+  ACTIVE_USER_TOKENS: 'chore_hero_user_tokens_v1',
 };
+
+export interface UserTokenPayload {
+  version: number;
+  heroName: string;
+  passcode: string;
+  validUntil: number;
+  validUntilFormatted: string;
+  profile: HeroProfile;
+  tasks: ChoreTask[];
+  createdAt: number;
+}
 
 export function getStoredProfile(): HeroProfile {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.PROFILE);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (!parsed.avatarUrl || parsed.avatarUrl.startsWith('/src/assets/')) {
+        parsed.avatarUrl = HERO_AVATARS[0].image;
+        parsed.avatarId = HERO_AVATARS[0].id;
+      }
+      return parsed;
+    }
+  } catch {}
 
-  // Default seed profile
   const initialProfile: HeroProfile = {
     id: 'hero_1',
     nickname: 'น้องอาชิ',
@@ -87,18 +89,14 @@ export function getStoredProfile(): HeroProfile {
 export function saveProfile(profile: HeroProfile) {
   try {
     localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
-  } catch {
-    // Storage quota or disabled
-  }
+  } catch {}
 }
 
 export function getStoredTasks(): ChoreTask[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.TASKS);
     if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
+  } catch {}
 
   const initialTasks: ChoreTask[] = [
     {
@@ -110,7 +108,7 @@ export function getStoredTasks(): ChoreTask[] {
       scheduledTime: '07:30',
       order: 1,
       isDailyRoutine: true,
-      starsReward: 1, // 1 chore = 1 star
+      starsReward: 1,
       status: 'completed',
       completedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
       completedTimeFormatted: '07:35 น.',
@@ -126,7 +124,7 @@ export function getStoredTasks(): ChoreTask[] {
       scheduledTime: '08:30',
       order: 2,
       isDailyRoutine: true,
-      starsReward: 1, // 1 chore = 1 star
+      starsReward: 1,
       status: 'pending',
       notes: 'ใช้น้ำยาล้างจาน 2 หยด ล้างให้เกลี้ยง',
       createdAt: new Date().toISOString(),
@@ -140,51 +138,23 @@ export function getStoredTasks(): ChoreTask[] {
       scheduledTime: '13:00',
       order: 3,
       isDailyRoutine: true,
-      starsReward: 1, // 1 chore = 1 star
+      starsReward: 1,
       status: 'pending',
-      notes: 'กรอกให้เต็มขวด 3 ขวด เช็ดปากขวดให้สะอาด',
+      notes: 'กรอกให้เต็มขวดและปิดฝาให้แน่น',
       createdAt: new Date().toISOString(),
     },
     {
       id: 'task-4',
-      title: 'กวาดบ้านห้องนั่งเล่น',
+      title: 'กวาดห้องนั่งเล่น',
       category: 'cleaning',
       icon: '🧹',
       color: 'amber',
       scheduledTime: '16:30',
       order: 4,
       isDailyRoutine: true,
-      starsReward: 1, // 1 chore = 1 star
+      starsReward: 1,
       status: 'pending',
-      notes: 'กวาดใต้โซฟาและมุมโต๊ะด้วยนะ',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'task-5',
-      title: 'หุงข้าวสำหรับมื้อเย็น',
-      category: 'kitchen',
-      icon: '🍚',
-      color: 'orange',
-      scheduledTime: '17:00',
-      order: 5,
-      isDailyRoutine: true,
-      starsReward: 1, // 1 chore = 1 star
-      status: 'pending',
-      notes: 'ซาวข้าว 2 รอบ ใส่น้ำถึงขีดเลข 2',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'task-6',
-      title: 'นำขยะไปทิ้งที่ถังใหญ่',
-      category: 'cleaning',
-      icon: '🗑️',
-      color: 'slate',
-      scheduledTime: '18:00',
-      order: 6,
-      isDailyRoutine: true,
-      starsReward: 1, // 1 chore = 1 star
-      status: 'pending',
-      notes: 'มัดปากถุงให้แน่น ระวังน้ำหยด',
+      notes: 'กวาดตามซอกโต๊ะและใต้โซฟา',
       createdAt: new Date().toISOString(),
     },
   ];
@@ -196,60 +166,51 @@ export function getStoredTasks(): ChoreTask[] {
 export function saveTasks(tasks: ChoreTask[]) {
   try {
     localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
-  } catch {
-    //
-  }
+  } catch {}
 }
 
 export function getStoredLogs(): ChoreLog[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.LOGS);
     if (raw) return JSON.parse(raw);
-  } catch {
-    //
-  }
+  } catch {}
 
-  // Sample initial log for immediate visual delight in gallery
-  const sampleLog: ChoreLog[] = [
+  const initialLogs: ChoreLog[] = [
     {
-      id: 'log-sample-1',
+      id: 'log-1',
       choreId: 'task-1',
       title: 'เก็บที่นอนให้เรียบร้อย',
       icon: '🛏️',
       childName: 'น้องอาชิ',
       timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-      thaiDateFormatted: 'วันนี้',
-      thaiTimeFormatted: '07:35:10 น.',
-      proofPhotoUrl: '', // fallback to stylized badge
+      thaiDateFormatted: 'วันอังคารที่ 4 พฤศจิกายน 2569',
+      thaiTimeFormatted: '07:35 น.',
+      proofPhotoUrl: '',
       starsEarned: 1,
       category: 'bedroom',
     },
   ];
-
-  saveLogs(sampleLog);
-  return sampleLog;
+  saveLogs(initialLogs);
+  return initialLogs;
 }
 
 export function saveLogs(logs: ChoreLog[]) {
   try {
-    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
-  } catch {
-    //
-  }
+    const trimmed = logs.slice(0, 50);
+    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(trimmed));
+  } catch {}
 }
 
 export function getStoredRewards(): WishlistReward[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.REWARDS);
     if (raw) return JSON.parse(raw);
-  } catch {
-    //
-  }
+  } catch {}
 
   const initialRewards: WishlistReward[] = [
     {
       id: 'rew-1',
-      title: 'กินไอศกรีมรสโปรด 1 ถ้วย 🍨',
+      title: 'กินไอศกรีมรสโปรด 🍨',
       requiredStars: 10,
       icon: '🍨',
       isClaimed: false,
@@ -257,26 +218,18 @@ export function getStoredRewards(): WishlistReward[] {
     {
       id: 'rew-2',
       title: 'เล่นเกม/ดูการ์ตูนเพิ่ม 30 นาที 🎮',
-      requiredStars: 15,
+      requiredStars: 20,
       icon: '🎮',
       isClaimed: false,
     },
     {
       id: 'rew-3',
-      title: 'ไปเที่ยวสวนน้ำ / สวนสนุกสุดสัปดาห์ 🏖️',
-      requiredStars: 30,
-      icon: '🏖️',
-      isClaimed: false,
-    },
-    {
-      id: 'rew-4',
-      title: 'ของเล่นชิ้นโปรดที่เลือกเอง 🧸',
-      requiredStars: 50,
-      icon: '🧸',
+      title: 'ไปเที่ยวสวนสนุกสุดสัปดาห์ 🎡',
+      requiredStars: 60,
+      icon: '🎡',
       isClaimed: false,
     },
   ];
-
   saveRewards(initialRewards);
   return initialRewards;
 }
@@ -284,7 +237,95 @@ export function getStoredRewards(): WishlistReward[] {
 export function saveRewards(rewards: WishlistReward[]) {
   try {
     localStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(rewards));
-  } catch {
-    //
+  } catch {}
+}
+
+export function formatThaiDate(date: Date): string {
+  const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const buddhistYear = date.getFullYear() + 543;
+  return `${date.getDate()} ${months[date.getMonth()]} ${buddhistYear} เวลา ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')} น.`;
+}
+
+export function createUserToken(
+  profile: HeroProfile,
+  tasks: ChoreTask[],
+  daysValid: number,
+  customPasscode?: string
+): { token: string; payload: UserTokenPayload } {
+  const now = Date.now();
+  const validUntilMs = now + daysValid * 24 * 60 * 60 * 1000;
+  const passcode = customPasscode || `HERO-${Math.floor(1000 + Math.random() * 9000)}`;
+  const validDate = new Date(validUntilMs);
+
+  const payload: UserTokenPayload = {
+    version: 1,
+    heroName: profile.nickname,
+    passcode,
+    validUntil: validUntilMs,
+    validUntilFormatted: formatThaiDate(validDate),
+    profile: {
+      ...profile,
+      parentPin: undefined,
+    },
+    tasks,
+    createdAt: now,
+  };
+
+  const jsonStr = JSON.stringify(payload);
+  const token = btoa(encodeURIComponent(jsonStr));
+  saveActiveUserToken(payload);
+
+  return { token, payload };
+}
+
+export function decodeUserToken(token: string): {
+  payload: UserTokenPayload | null;
+  isExpired: boolean;
+  timeLeftMs: number;
+} {
+  try {
+    const jsonStr = decodeURIComponent(atob(token));
+    const payload: UserTokenPayload = JSON.parse(jsonStr);
+    const now = Date.now();
+    const isExpired = now > payload.validUntil;
+    const timeLeftMs = Math.max(0, payload.validUntil - now);
+
+    return { payload, isExpired, timeLeftMs };
+  } catch (err) {
+    console.error('Failed to parse user token:', err);
+    return { payload: null, isExpired: true, timeLeftMs: 0 };
   }
+}
+
+export function getActiveUserTokens(): UserTokenPayload[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_USER_TOKENS);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+export function saveActiveUserToken(payload: UserTokenPayload) {
+  try {
+    const tokens = getActiveUserTokens().filter((t) => t.passcode !== payload.passcode);
+    tokens.unshift(payload);
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_USER_TOKENS, JSON.stringify(tokens.slice(0, 20)));
+  } catch {}
+}
+
+export function renewUserToken(
+  passcode: string,
+  additionalDays: number
+): UserTokenPayload | null {
+  const tokens = getActiveUserTokens();
+  const target = tokens.find((t) => t.passcode.toLowerCase() === passcode.toLowerCase());
+  if (!target) return null;
+
+  const currentExpiry = Math.max(Date.now(), target.validUntil);
+  const newExpiryMs = currentExpiry + additionalDays * 24 * 60 * 60 * 1000;
+  target.validUntil = newExpiryMs;
+  target.validUntilFormatted = formatThaiDate(new Date(newExpiryMs));
+
+  localStorage.setItem(STORAGE_KEYS.ACTIVE_USER_TOKENS, JSON.stringify(tokens));
+  return target;
 }
