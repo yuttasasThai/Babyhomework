@@ -1,17 +1,151 @@
 import JSZip from 'jszip';
 import { APP_REVISION } from '../config/revision';
 
-import packageJsonRaw from '../../package.json?raw';
-import viteConfigRaw from '../../vite.config.ts?raw';
-import tsconfigRaw from '../../tsconfig.json?raw';
-import vercelJsonRaw from '../../vercel.json?raw';
-import indexHtmlRaw from '../../index.html?raw';
-import metadataJsonRaw from '../../metadata.json?raw';
-import envExampleRaw from '../../.env.example?raw';
-import gitignoreRaw from '../../.gitignore?raw';
-import npmrcRaw from '../../.npmrc?raw';
-import readmeRaw from '../../README.md?raw';
+// Root configuration templates (inlined so build never fails if root dotfiles like .gitignore or .env are omitted on GitHub)
+const packageJsonRaw = `{
+  "name": "react-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist server.js",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/canvas-confetti": "^1.9.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "canvas-confetti": "^1.9.4",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "jszip": "^3.10.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^8.3.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jszip": "^3.4.0",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.21.0",
+    "typescript": "^7.0.2"
+  }
+}`;
 
+const viteConfigRaw = `import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import {fileURLToPath} from 'url';
+import path from 'path';
+import {defineConfig} from 'vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default defineConfig(() => {
+  return {
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+    server: {
+      hmr: process.env.DISABLE_HMR !== 'true',
+      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+  };
+});
+`;
+
+const tsconfigRaw = `{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "exclude": ["dist"]
+}`;
+
+const vercelJsonRaw = `{
+  "framework": "vite",
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}`;
+
+const indexHtmlRaw = `<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Little Hero Chore Quest - ฮีโร่ตัวจิ๋วพิชิตงานบ้าน</title>
+    <meta name="description" content="เว็บแอปพลิเคชันสำหรับเด็กทำงานบ้าน มีเลือกภารกิจ กำหนดเวลา ถ่ายรูปประทับเวลาอัตโนมัติ และสะสมดาว" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Kanit:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-amber-50/40 text-slate-800 antialiased min-h-screen selection:bg-amber-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>`;
+
+const metadataJsonRaw = `{
+  "name": "Little Hero Chore Quest",
+  "description": "Chore quest adventure app for kids with photo proof watermarking and star ranking"
+}`;
+
+const envExampleRaw = `# VITE_API_BASE=
+# GEMINI_API_KEY=`;
+
+const gitignoreRaw = `node_modules
+dist
+.env
+.env.local
+.DS_Store`;
+
+const npmrcRaw = `legacy-peer-deps=true`;
+
+const readmeRaw = `# Little Hero Chore Quest
+เว็บแอปพลิเคชันฮีโร่ตัวจิ๋วพิชิตงานบ้าน`;
+
+// Glob all source files in src directory
 const srcTextFiles = import.meta.glob<string>(
   [
     '../*.{ts,tsx,css}',
@@ -20,6 +154,7 @@ const srcTextFiles = import.meta.glob<string>(
   { query: '?raw', import: 'default', eager: true }
 );
 
+// Glob all image assets in src/assets/images
 const srcImageFiles = import.meta.glob<string>(
   '../assets/images/*.{jpg,jpeg,png,webp,svg}',
   { query: '?url', import: 'default', eager: true }
