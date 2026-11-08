@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HeroProfile, ChoreTask, ChoreLog, WishlistReward } from '../types/chore';
 import { APP_REVISION, exportSourceBackupData } from '../config/revision';
-import { downloadFullSourceZip, getSourceFileList, SourceFileInfo } from '../utils/sourceZipExporter';
+import {
+  downloadFullSourceZip,
+  downloadUtilsOnlyZip,
+  downloadSingleTextFile,
+  getSourceFileList,
+} from '../utils/sourceZipExporter';
+import {
+  createUserToken,
+  getActiveUserTokens,
+  renewUserToken,
+  deleteUserToken,
+  UserTokenPayload,
+} from '../utils/storage';
 import { soundManager } from '../utils/soundEffects';
 import {
   Link2,
@@ -18,10 +30,15 @@ import {
   ShieldCheck,
   FolderArchive,
   FileCode,
-  Layers,
   FileText,
-  AlertCircle,
   Loader2,
+  Boxes,
+  KeyRound,
+  Calendar,
+  Clock,
+  RefreshCw,
+  Trash2,
+  User,
 } from 'lucide-react';
 
 interface Props {
@@ -31,6 +48,7 @@ interface Props {
   tasks: ChoreTask[];
   logs: ChoreLog[];
   rewards: WishlistReward[];
+  isPlayerOnlyMode?: boolean;
 }
 
 export const SharePlayerLinkModal: React.FC<Props> = ({
@@ -40,33 +58,126 @@ export const SharePlayerLinkModal: React.FC<Props> = ({
   tasks,
   logs,
   rewards,
+  isPlayerOnlyMode = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'download' | 'viewer' | 'link' | 'deploy'>('download');
+  const [activeTab, setActiveTab] = useState<'user_link' | 'download' | 'utils' | 'viewer' | 'deploy'>('user_link');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedPasscode, setCopiedPasscode] = useState(false);
   const [copiedFile, setCopiedFile] = useState(false);
 
-  // ZIP download state
+  // User link & Expiry generator state
+  const [userNameInput, setUserNameInput] = useState<string>(profile.nickname || 'น้องอาชิ');
+  const [userPasswordInput, setUserPasswordInput] = useState<string>(() => `HERO-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [expiryDays, setExpiryDays] = useState<number>(30);
+  const [activeTokens, setActiveTokens] = useState<UserTokenPayload[]>([]);
+  const [lastGeneratedPayload, setLastGeneratedPayload] = useState<UserTokenPayload | null>(null);
+  const [lastGeneratedLink, setLastGeneratedLink] = useState<string | null>(null);
+
+  // Full ZIP download state
   const [isZipping, setIsZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
   const [zipStatusText, setZipStatusText] = useState('');
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
 
+  // Utils only ZIP state
+  const [isUtilsZipping, setIsUtilsZipping] = useState(false);
+  const [utilsZipSuccess, setUtilsZipSuccess] = useState<string | null>(null);
+
   // File viewer state
   const fileList = getSourceFileList();
   const [selectedFilePath, setSelectedFilePath] = useState<string>('package.json');
 
+  // Load existing tokens on open
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTokens(getActiveUserTokens());
+      if (!userNameInput) {
+        setUserNameInput(profile.nickname || 'น้องอาชิ');
+      }
+    }
+  }, [isOpen, profile.nickname]);
+
   if (!isOpen) return null;
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
-  const playerLink = `${currentOrigin}?mode=player`;
+  // If in user mode, do NOT allow opening this modal!
+  if (isPlayerOnlyMode) {
+    return null;
+  }
 
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
   const selectedFile = fileList.find((f) => f.path === selectedFilePath) || fileList[0];
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(playerLink);
+  // Generate User Link with token and expiration
+  const handleGenerateUserTokenLink = () => {
+    soundManager.playSuccessFanfare();
+    const finalUserName = userNameInput.trim() || profile.nickname || 'น้องอาชิ';
+    const finalPassword = userPasswordInput.trim() || `HERO-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const { token, payload } = createUserToken(
+      profile,
+      tasks,
+      expiryDays,
+      finalPassword,
+      finalUserName,
+      finalPassword
+    );
+
+    const fullLink = `${currentOrigin}?playerToken=${token}`;
+    setLastGeneratedLink(fullLink);
+    setLastGeneratedPayload(payload);
+    setActiveTokens(getActiveUserTokens());
+  };
+
+  // Renew an existing token
+  const handleRenewToken = (passcode: string, days: number) => {
+    const updated = renewUserToken(passcode, days);
+    if (updated) {
+      soundManager.playStarPop();
+      setActiveTokens(getActiveUserTokens());
+      if (lastGeneratedPayload?.passcode === passcode) {
+        setLastGeneratedPayload(updated);
+      }
+    }
+  };
+
+  // Delete/Revoke a token
+  const handleDeleteToken = (passcode: string) => {
+    deleteUserToken(passcode);
+    soundManager.playStarPop();
+    setActiveTokens(getActiveUserTokens());
+    if (lastGeneratedPayload?.passcode === passcode) {
+      setLastGeneratedPayload(null);
+      setLastGeneratedLink(null);
+    }
+  };
+
+  const handleCopyLink = (linkToCopy?: string) => {
+    const link = linkToCopy || lastGeneratedLink || `${currentOrigin}?mode=player`;
+    navigator.clipboard.writeText(link);
     setCopiedLink(true);
     soundManager.playStarPop();
     setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleCopyPasscode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedPasscode(true);
+    soundManager.playStarPop();
+    setTimeout(() => setCopiedPasscode(false), 2000);
+  };
+
+  const handleShareTokenToLine = (link: string, payload: UserTokenPayload) => {
+    const message = `🌟 ลิงก์ผจญภัยงานบ้านสำหรับฮีโร่ตัวจิ๋ว: ${payload.heroName}
+🗺️ เข้าสู่แผนที่ภารกิจและทำภารกิจสะสมดาวได้ที่นี่:
+${link}
+
+👤 ชื่อผู้ใช้ (User): ${payload.userName || payload.heroName}
+🔑 รหัสผ่าน (Password): ${payload.passcode}
+⏰ วันหมดอายุ: ${payload.validUntilFormatted}
+🛡️ สิทธิ์ผู้ใช้: ล็อกโหมดแอดมิน ปลอดภัย และไม่สามารถดาวน์โหลดซอร์สโค้ดได้ ⭐`;
+
+    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(message)}`;
+    window.open(lineUrl, '_blank');
   };
 
   const handleCopySelectedFile = () => {
@@ -76,17 +187,6 @@ export const SharePlayerLinkModal: React.FC<Props> = ({
       soundManager.playStarPop();
       setTimeout(() => setCopiedFile(false), 2500);
     }
-  };
-
-  const handleShareToLine = () => {
-    const message = `🌟 ลิงก์ผจญภัยงานบ้านสำหรับฮีโร่ตัวจิ๋ว: ${profile.nickname}
-🗺️ เข้าสู่แผนที่ลายแทงและทำภารกิจประจำวันได้ที่นี่:
-${playerLink}
-
-(ระบบล็อกสิทธิ์แอดมิน เพื่อความปลอดภัยเรียบร้อยแล้ว ⭐)`;
-
-    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(message)}`;
-    window.open(lineUrl, '_blank');
   };
 
   const handleDownloadFullZip = async () => {
@@ -109,39 +209,107 @@ ${playerLink}
     } catch (err) {
       console.error('Failed to generate zip:', err);
       setIsZipping(false);
-      alert('เกิดข้อผิดพลาดในการสร้างไฟล์ ZIP กรุณาลองใหม่อีกครั้ง');
     }
   };
 
-  const handleExportDataBackup = () => {
-    soundManager.playSuccessFanfare();
-    exportSourceBackupData({
-      profile,
-      tasks,
-      logs,
-      rewards,
-    });
+  const handleDownloadUtilsZip = async () => {
+    try {
+      setIsUtilsZipping(true);
+      soundManager.playStarPop();
+      const fileName = await downloadUtilsOnlyZip();
+      setUtilsZipSuccess(fileName);
+      soundManager.playSuccessFanfare();
+      setTimeout(() => {
+        setIsUtilsZipping(false);
+      }, 800);
+    } catch (err) {
+      console.error('Failed to generate utils zip:', err);
+      setIsUtilsZipping(false);
+    }
   };
 
+  const UTILS_FILES_META = [
+    {
+      path: 'src/utils/watermark.ts',
+      name: 'watermark.ts',
+      title: 'ประทับเวลาจริง Canvas บนรูป (ฉบับเสถียร ไม่หมุนค้าง)',
+      desc: 'ประทับวันเวลาจริงและรหัสตรวจรับบนภาพ ความเร็วสูง รองรับมือถือ Android',
+      critical: true,
+    },
+    {
+      path: 'src/utils/storage.ts',
+      name: 'storage.ts',
+      title: 'ระบบจัดเก็บข้อมูลและงานบ้าน & User Link',
+      desc: 'รหัสแอดมิน 0992256601, สร้าง User Token, วันหมดอายุ, ต่ออายุ',
+      critical: true,
+    },
+    {
+      path: 'src/utils/ranks.ts',
+      name: 'ranks.ts',
+      title: 'คำนวณระดับดาว 6 ขั้น',
+      desc: 'ระดับดาวสะสม (เด็กขยัน, ผู้พิชิต, พ่อบ้านจิ๋ว 1-3, แชมเปี้ยน)',
+      critical: true,
+    },
+    {
+      path: 'src/utils/soundEffects.ts',
+      name: 'soundEffects.ts',
+      title: 'ระบบเสียงเอฟเฟกต์',
+      desc: 'เสียงปุ่มกด, เสียงดาวป๊อป, เสียงสำเร็จภารกิจ (Web Audio API)',
+      critical: true,
+    },
+    {
+      path: 'src/utils/alarmAudio.ts',
+      name: 'alarmAudio.ts',
+      title: 'เสียงพูดเตือนภารกิจตามเวลา',
+      desc: 'พูดเตือนชื่อภารกิจตามคิวเวลาและพูดซ้ำเป็นช่วงๆ (Speech Synthesis)',
+      critical: true,
+    },
+    {
+      path: 'src/utils/lineShare.ts',
+      name: 'lineShare.ts',
+      title: 'ระบบแชร์ส่งงานเข้า LINE',
+      desc: 'สร้างลิงก์และข้อความส่งงานให้คุณพ่อคุณแม่ตรวจให้คะแนน',
+      critical: false,
+    },
+    {
+      path: 'src/utils/confetti.ts',
+      name: 'confetti.ts',
+      title: 'พลุกระดาษฉลองชัย',
+      desc: 'ยิงพลุกระดาษสีทองเวลาเด็กทำภารกิจสำเร็จ',
+      critical: false,
+    },
+    {
+      path: 'src/utils/sourceZipExporter.ts',
+      name: 'sourceZipExporter.ts',
+      title: 'ตัวส่งออก Source Code',
+      desc: 'รวบรวมไฟล์ทั้งหมดในโปรเจกต์เป็น .ZIP สำหรับแบ็กอัปและแอดมิน',
+      critical: true,
+    },
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 flex flex-col my-auto max-h-[92vh]">
-        {/* Header */}
-        <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white flex items-center justify-between shrink-0 shadow-sm">
-          <div className="flex items-center gap-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in overflow-y-auto">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full overflow-hidden border border-amber-200 flex flex-col my-auto max-h-[94vh]">
+        {/* Modal Top Header */}
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white flex items-center justify-between shrink-0 shadow-sm">
+          <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-xl shadow-inner">
-              📦
+              👑
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-bold font-display leading-tight flex items-center gap-2">
-                <span>ดาวน์โหลด Source Code เต็ม & ลิงก์ส่งให้เด็ก</span>
+              <h3 className="text-base sm:text-lg font-black font-display leading-tight flex items-center gap-1.5">
+                <span>ศูนย์ควบคุมแอดมิน & ลิงก์ User</span>
+                <span className="text-[10px] bg-slate-900/60 px-2 py-0.5 rounded-full font-mono font-normal">
+                  {APP_REVISION.version} ({APP_REVISION.buildTag})
+                </span>
               </h3>
-              <p className="text-xs text-indigo-100 mt-0.5">
-                Revision: {APP_REVISION.revision} (เวอร์ชัน {APP_REVISION.version}) • พร้อมขึ้น Vercel / GitHub
+              <p className="text-xs text-amber-100">
+                สร้างลิงก์สำหรับผู้ใช้/ลูก กำหนด username, password, วันหมดอายุ, ต่ออายุ
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-white/20 transition min-h-[40px] min-w-[40px] flex items-center justify-center text-white"
           >
@@ -149,352 +317,551 @@ ${playerLink}
           </button>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex border-b border-slate-200 bg-slate-50/90 px-3 sm:px-4 pt-2.5 gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar shrink-0">
+        {/* Navigation Tabs Bar */}
+        <div className="px-3 pt-2 bg-slate-50 border-b border-slate-200 flex gap-1 overflow-x-auto shrink-0 scrollbar-none">
           <button
             onClick={() => {
+              soundManager.playStarPop();
+              setActiveTab('user_link');
+            }}
+            className={`py-2 px-3.5 rounded-t-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'user_link'
+                ? 'bg-white text-indigo-700 border-t-2 border-indigo-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
+            <span>🔑 สร้างลิงก์ & รหัส User</span>
+          </button>
+
+          <button
+            onClick={() => {
+              soundManager.playStarPop();
               setActiveTab('download');
-              soundManager.playStarPop();
             }}
-            className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+            className={`py-2 px-3.5 rounded-t-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
               activeTab === 'download'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'bg-white text-amber-900 border-t-2 border-amber-500 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <FolderArchive className="w-4 h-4" />
-            <span>โหลด Source Code (.ZIP)</span>
+            <FolderArchive className="w-3.5 h-3.5 text-amber-500" />
+            <span>📦 โหลด Source เต็ม (ZIP)</span>
           </button>
 
           <button
             onClick={() => {
+              soundManager.playStarPop();
+              setActiveTab('utils');
+            }}
+            className={`py-2 px-3.5 rounded-t-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'utils'
+                ? 'bg-white text-emerald-800 border-t-2 border-emerald-500 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Boxes className="w-3.5 h-3.5 text-emerald-500" />
+            <span>📁 src/utils (8 ไฟล์)</span>
+          </button>
+
+          <button
+            onClick={() => {
+              soundManager.playStarPop();
               setActiveTab('viewer');
-              soundManager.playStarPop();
             }}
-            className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+            className={`py-2 px-3.5 rounded-t-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
               activeTab === 'viewer'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'bg-white text-amber-900 border-t-2 border-amber-500 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <FileCode className="w-4 h-4" />
-            <span>ดู & คัดลอกโค้ด ({fileList.length} ไฟล์)</span>
+            <FileCode className="w-3.5 h-3.5 text-amber-500" />
+            <span>📄 ดูโค้ดทีละไฟล์</span>
           </button>
 
           <button
             onClick={() => {
-              setActiveTab('link');
               soundManager.playStarPop();
-            }}
-            className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'link'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Lock className="w-4 h-4" />
-            <span>ลิงก์เฉพาะเด็ก</span>
-          </button>
-
-          <button
-            onClick={() => {
               setActiveTab('deploy');
-              soundManager.playStarPop();
             }}
-            className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+            className={`py-2 px-3.5 rounded-t-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
               activeTab === 'deploy'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'bg-white text-amber-900 border-t-2 border-amber-500 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <Globe className="w-4 h-4" />
-            <span>คู่มือขึ้น Vercel</span>
+            <Globe className="w-3.5 h-3.5 text-sky-500" />
+            <span>🚀 แนะนำวิธีอัปเดตไฟล์ GitHub</span>
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-slate-700">
-          {/* TAB 1: DOWNLOAD COMPLETE ZIP */}
-          {activeTab === 'download' && (
-            <div className="space-y-4">
-              {/* Highlight Hero Download Card */}
-              <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-2 border-indigo-200/80 shadow-sm space-y-4 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-indigo-600/30">
-                  <FolderArchive className="w-8 h-8" />
-                </div>
-
-                <div>
-                  <h4 className="text-lg sm:text-xl font-bold text-slate-900 font-display">
-                    ดาวน์โหลด Source Code ครบทุกไฟล์ (.ZIP)
-                  </h4>
-                  <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto mt-1 leading-relaxed">
-                    รวมโค้ดทั้งหมดครบ 100% ทั้ง <strong>Vite, React 19, TypeScript, Tailwind, vercel.json, package.json, รูปภาพ และ components</strong> ทั้งหมด พร้อมอัปขึ้น GitHub และ deploy บน Vercel ได้ทันที
-                  </p>
-                </div>
-
-                {/* Progress Bar when Zipping */}
-                {isZipping ? (
-                  <div className="p-4 bg-white rounded-2xl border border-indigo-100 shadow-xs space-y-2 max-w-md mx-auto">
-                    <div className="flex items-center justify-between text-xs font-bold text-indigo-700">
-                      <span className="flex items-center gap-1.5">
-                        <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                        <span>กำลังบีบอัดไฟล์ Source Code...</span>
-                      </span>
-                      <span>{zipProgress}%</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-200"
-                        style={{ width: `${zipProgress}%` }}
-                      />
-                    </div>
-                    <p className="text-[11px] text-slate-500 font-mono truncate text-left">
-                      {zipStatusText}
+        {/* Tab Content Body */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
+          {/* ========================================================
+              TAB 1: สร้างลิงก์ User พร้อมกำหนด username, password, วันหมดอายุ, ต่ออายุ
+              ======================================================== */}
+          {activeTab === 'user_link' && (
+            <div className="space-y-6">
+              {/* Creator Box */}
+              <div className="bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/50 rounded-2xl p-4 sm:p-5 border-2 border-indigo-200 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="text-sm sm:text-base font-black text-slate-900 font-display">
+                      กำหนด User Name, Password, และ วันหมดอายุ
+                    </h4>
+                    <p className="text-xs text-slate-600">
+                      เมื่อส่งลิงก์นี้ไปให้ลูกหรือเปิดบนโทรศัพท์เครื่องอื่น จะเข้าสู่โหมดฮีโร่ตัวจิ๋วทันที และไม่สามารถดาวน์โหลด Source Code ได้
                     </p>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleDownloadFullZip}
-                    className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-sm sm:text-base flex items-center justify-center gap-3 shadow-lg shadow-indigo-600/25 transition active:scale-95 mx-auto"
-                  >
-                    <Download className="w-5 h-5" />
-                    <span>📥 กดเพื่อดาวน์โหลด Source Code เต็ม (.ZIP)</span>
-                  </button>
-                )}
+                </div>
 
-                {downloadSuccess && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-800 font-medium flex items-center justify-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>ดาวน์โหลดไฟล์ <strong>{downloadSuccess}</strong> สำเร็จแล้ว! ตรวจสอบในโฟลเดอร์ Downloads บนมือถือได้เลย</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  {/* User Name input */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <User className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>User Name (ชื่อผู้ใช้)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={userNameInput}
+                      onChange={(e) => setUserNameInput(e.target.value)}
+                      placeholder="เช่น น้องอาชิ, น้องมะลิ"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white outline-none focus:border-indigo-500"
+                    />
                   </div>
-                )}
-              </div>
 
-              {/* What is included breakdown */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
-                <span className="font-bold text-slate-900 block font-display">
-                  📋 รายการที่รวมอยู่ในไฟล์ ZIP ชุดนี้:
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600">
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span><strong>vercel.json</strong> (ตั้งค่า SPA Rewrite)</span>
+                  {/* Password / Passcode input */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Password (รหัสผ่าน)</span>
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={userPasswordInput}
+                        onChange={(e) => setUserPasswordInput(e.target.value)}
+                        placeholder="เช่น 1234 หรือ รหัสผ่าน"
+                        className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold bg-white outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserPasswordInput(`HERO-${Math.floor(1000 + Math.random() * 9000)}`);
+                          soundManager.playStarPop();
+                        }}
+                        className="px-2 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+                        title="สุ่มรหัสผ่านใหม่"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span><strong>package.json</strong> (Dependencies ครบ)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span><strong>vite.config.ts & tsconfig.json</strong></span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span><strong>index.html & README.md</strong></span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span><strong>src/App.tsx, components, utils</strong></span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span><strong>ภาพแผนที่ & อวตารฮีโร่ทั้งหมด</strong></span>
+
+                  {/* Expiry Duration Selection */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>กำหนดวันหมดอายุ</span>
+                    </label>
+                    <div className="grid grid-cols-4 gap-1">
+                      {[7, 15, 30, 90].map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => {
+                            setExpiryDays(days);
+                            soundManager.playStarPop();
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold border transition ${
+                            expiryDays === days
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {days}ว
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Secondary Option: Backup Data JSON only */}
-              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-amber-950 block font-display">
-                    สำรองเฉพาะข้อมูลภารกิจ & ประวัติงาน (.JSON):
-                  </span>
-                  <span className="text-[11px] text-amber-800">
-                    สำหรับสำรองคะแนนสะสมและรายชื่องานบ้านไว้กู้คืน
-                  </span>
-                </div>
+                {/* Generate Button */}
                 <button
                   type="button"
-                  onClick={handleExportDataBackup}
-                  className="py-2 px-3.5 rounded-xl bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs flex items-center gap-1.5 border border-amber-300 transition shrink-0 shadow-2xs"
+                  onClick={handleGenerateUserTokenLink}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-sm shadow-md shadow-indigo-500/20 transition active:scale-98 flex items-center justify-center gap-2 font-display"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>โหลด Data (.JSON)</span>
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>⚡ สร้างลิงก์ User: {userNameInput || 'น้องอาชิ'} (อายุ {expiryDays} วัน)</span>
                 </button>
+              </div>
+
+              {/* Generated Result Box */}
+              {lastGeneratedLink && lastGeneratedPayload && (
+                <div className="bg-emerald-50 rounded-2xl p-4 sm:p-5 border-2 border-emerald-300 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                      <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
+                      <span>สร้างลิงก์สำเร็จแล้ว พร้อมใช้งานบนโทรศัพท์เครื่องอื่น</span>
+                    </span>
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                      หมดอายุ: {lastGeneratedPayload.validUntilFormatted}
+                    </span>
+                  </div>
+
+                  {/* Link Box */}
+                  <div className="flex items-center gap-2 bg-white rounded-xl p-2 border border-emerald-200">
+                    <input
+                      type="text"
+                      readOnly
+                      value={lastGeneratedLink}
+                      className="flex-1 bg-transparent border-none text-xs font-mono text-slate-700 truncate outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(lastGeneratedLink)}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1 shrink-0"
+                    >
+                      {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedLink ? 'คัดลอกแล้ว!' : 'คัดลอกลิงก์'}</span>
+                    </button>
+                  </div>
+
+                  {/* Passcode display & LINE share */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-3">
+                      <div className="text-xs">
+                        <span className="text-slate-500">User: </span>
+                        <strong className="text-slate-900">{lastGeneratedPayload.userName || lastGeneratedPayload.heroName}</strong>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-500">Password: </span>
+                        <span className="font-mono font-black text-xs bg-white px-2 py-0.5 rounded-lg border border-emerald-300 text-indigo-900">
+                          {lastGeneratedPayload.passcode}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyPasscode(lastGeneratedPayload.passcode)}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline"
+                        >
+                          {copiedPasscode ? 'คัดลอกแล้ว' : 'คัดลอก'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleShareTokenToLine(lastGeneratedLink, lastGeneratedPayload)}
+                      className="py-2 px-4 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>📲 ส่งให้ลูก/เครื่องอื่นผ่าน LINE</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Active Tokens & Renewal List */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                  <span>รายการลิงก์ User ที่สร้างไว้ & ปุ่มต่ออายุ ({activeTokens.length})</span>
+                  <span className="text-[11px] text-slate-500 font-normal">กดปุ่มเพื่อขยายเวลาหรือลบ</span>
+                </h4>
+
+                {activeTokens.length === 0 ? (
+                  <p className="text-xs text-slate-500 p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center">
+                    ยังไม่มีลิงก์ User ที่สร้างไว้ กดปุ่มสร้างด้านบนได้เลยครับ
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {activeTokens.map((tok) => {
+                      const isExpired = Date.now() > tok.validUntil;
+                      const daysLeft = Math.ceil((tok.validUntil - Date.now()) / (1000 * 60 * 60 * 24));
+                      const tokLink = `${currentOrigin}?playerToken=${btoa(encodeURIComponent(JSON.stringify(tok)))}`;
+
+                      return (
+                        <div
+                          key={tok.passcode}
+                          className={`p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isExpired
+                              ? 'bg-rose-50/60 border-rose-200 text-rose-900'
+                              : 'bg-white border-slate-200 text-slate-800 shadow-xs'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                                👤 {tok.userName || tok.heroName}
+                              </span>
+                              <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded-md text-slate-900">
+                                🔑 {tok.passcode}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isExpired
+                                    ? 'bg-rose-200 text-rose-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {isExpired ? 'หมดอายุแล้ว' : `ใช้งานได้ (เหลือ ${daysLeft} วัน)`}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              หมดอายุ: {tok.validUntilFormatted}
+                            </p>
+                          </div>
+
+                          {/* Renewal actions & Delete */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] text-slate-500 font-semibold mr-1">ต่ออายุ:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRenewToken(tok.passcode, 7)}
+                              className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 transition"
+                            >
+                              +7 วัน
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRenewToken(tok.passcode, 30)}
+                              className="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition shadow-xs"
+                            >
+                              +30 วัน
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRenewToken(tok.passcode, 90)}
+                              className="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[11px] font-bold border border-purple-200 transition"
+                            >
+                              +90 วัน
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyLink(tokLink)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition"
+                              title="คัดลอกลิงก์"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteToken(tok.passcode)}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition"
+                              title="ลบลิงก์นี้"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Security note */}
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>การันตีความปลอดภัย:</strong> ลิงก์ที่สร้างด้วยระบบนี้ จะนำเครื่องปลายทางเข้าสู่โหมดฮีโร่ตัวจิ๋ว (Player Mode) ทันที
+                  โดยจะ<strong>ไม่มีปุ่มดาวน์โหลด Source Code</strong>, ไม่มีหน้าดูไฟล์ระบบ และต้องใส่รหัสแอดมิน (0992256601) เท่านั้นจึงจะเข้าหน้าแอดมินได้
+                </span>
               </div>
             </div>
           )}
 
-          {/* TAB 2: IN-APP FILE CODE VIEWER & COPY */}
-          {activeTab === 'viewer' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-600">
-                <span>เลือกไฟล์เพื่อดูและคัดลอกโค้ดไปวางใน GitHub ได้ทันที:</span>
-                <span className="font-mono text-slate-400">
-                  {selectedFile.sizeBytes ? `${Math.round(selectedFile.sizeBytes / 1024 * 10) / 10} KB` : ''}
-                </span>
+          {/* ========================================================
+              TAB 2: ดาวน์โหลด Full Source ZIP (Admin Only)
+              ======================================================== */}
+          {activeTab === 'download' && (
+            <div className="space-y-5">
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-5 border border-amber-200 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl">📦</span>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-base font-display">
+                      ดาวน์โหลด Source Code ทั้งหมด (.ZIP) สำหรับ Admin
+                    </h4>
+                    <p className="text-xs text-slate-600">
+                      รวมไฟล์โค้ดล่าสุดทั้งหมด (src, config, vercel.json, package.json)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    disabled={isZipping}
+                    onClick={handleDownloadFullZip}
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-sm shadow-md shadow-amber-500/25 transition active:scale-98 flex items-center justify-center gap-2 font-display"
+                  >
+                    {isZipping ? (
+                      <>
+                        <Loader2 className="w-5 h-5 text-slate-950 animate-spin" />
+                        <span>กำลังบีบอัดไฟล์ ZIP ({zipProgress}%)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-5 h-5 text-slate-950" />
+                        <span>ดาวน์โหลดไฟล์ Sourcecode ทั้งหมด (.ZIP)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {downloadSuccess && (
+                  <p className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
+                    ✓ ดาวน์โหลดสำเร็จ: {downloadSuccess}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================
+              TAB 3: โหลดเฉพาะ src/utils (Admin Only)
+              ======================================================== */}
+          {activeTab === 'utils' && (
+            <div className="space-y-4">
+              <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-200 flex items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-bold text-emerald-950 text-sm">
+                    ดาวน์โหลดเฉพาะโฟลเดอร์ src/utils ทั้งหมด (8 ไฟล์)
+                  </h4>
+                  <p className="text-xs text-emerald-700">
+                    สำหรับอัปเดตไฟล์ใน GitHub repo `Babyhomework/src/utils/`
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isUtilsZipping}
+                  onClick={handleDownloadUtilsZip}
+                  className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 shrink-0"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>โหลด ZIP utils</span>
+                </button>
               </div>
 
-              {/* File selector bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {UTILS_FILES_META.map((file) => (
+                  <div
+                    key={file.path}
+                    className="p-3 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-mono font-bold text-xs text-slate-900 truncate">
+                          {file.name}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 truncate">{file.title}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = fileList.find((f) => f.path === file.path);
+                        if (target?.content) {
+                          downloadSingleTextFile(file.name, target.content);
+                          soundManager.playStarPop();
+                        }
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1 shrink-0"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>โหลด</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================
+              TAB 4: ดูโค้ดทีละไฟล์ (Admin Only)
+              ======================================================== */}
+          {activeTab === 'viewer' && (
+            <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <select
                   value={selectedFilePath}
                   onChange={(e) => setSelectedFilePath(e.target.value)}
-                  className="flex-1 px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-mono font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold bg-white"
                 >
-                  <optgroup label="⚙️ การตั้งค่าหลัก (Root Config)">
-                    {fileList
-                      .filter((f) => f.category === 'config' || f.category === 'docs')
-                      .map((f) => (
-                        <option key={f.path} value={f.path}>
-                          {f.path}
-                        </option>
-                      ))}
-                  </optgroup>
-                  <optgroup label="💻 โค้ดโปรเจกต์ (Source Code)">
-                    {fileList
-                      .filter((f) => f.category === 'source')
-                      .map((f) => (
-                        <option key={f.path} value={f.path}>
-                          {f.path}
-                        </option>
-                      ))}
-                  </optgroup>
+                  {fileList.map((f) => (
+                    <option key={f.path} value={f.path}>
+                      {f.path}
+                    </option>
+                  ))}
                 </select>
-
-                {selectedFile.content && (
-                  <button
-                    type="button"
-                    onClick={handleCopySelectedFile}
-                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-xs shrink-0"
-                  >
-                    {copiedFile ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                    <span>{copiedFile ? 'คัดลอกแล้ว!' : 'คัดลอกทั้งไฟล์'}</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleCopySelectedFile}
+                  className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5"
+                >
+                  {copiedFile ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedFile ? 'คัดลอกแล้ว' : 'คัดลอกทั้งไฟล์'}</span>
+                </button>
               </div>
 
-              {/* Code viewer box */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 text-slate-200 p-4 font-mono text-xs overflow-x-auto max-h-[40vh] select-text">
-                {selectedFile.content ? (
-                  <pre className="whitespace-pre">{selectedFile.content}</pre>
-                ) : (
-                  <div className="py-8 text-center text-slate-400">
-                    <Layers className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <span>ไฟล์นี้เป็นรูปภาพหรือ Binary Asset ถูกรวมอยู่ในไฟล์ ZIP ให้เรียบร้อยแล้ว</span>
-                  </div>
-                )}
+              <div className="bg-slate-950 text-slate-200 rounded-2xl p-4 overflow-x-auto max-h-[350px] text-xs font-mono border border-slate-800">
+                <pre>{selectedFile?.content || '// ไม่มีเนื้อหาไฟล์'}</pre>
               </div>
             </div>
           )}
 
-          {/* TAB 3: PLAYER LINK */}
-          {activeTab === 'link' && (
-            <div className="space-y-4">
-              {/* Security feature box */}
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-2">
-                <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
-                  <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <span>ระบบล็อกสิทธิ์แอดมินอัตโนมัติ (Player Only Mode)</span>
-                </div>
-                <ul className="space-y-1 list-disc list-inside text-emerald-800 pl-1 leading-relaxed">
-                  <li>เด็กสามารถดูแผนที่ลายแทง และแตะทำภารกิจประจำวันได้ตามปกติ</li>
-                  <li>สามารถเปิดกล้องถ่ายรูปส่งงานและสะสมดาวได้</li>
-                  <li><strong>🔒 ซ่อนและล็อกสิทธิ์แอดมิน:</strong> ไม่สามารถลบงานบ้าน, ไม่สามารถแก้ดาว, และไม่สามารถเข้าเมนูผู้ปกครองได้ (ต้องใส่รหัส PIN 4 หลัก ค่าเริ่มต้น: 1234)</li>
-                </ul>
-              </div>
-
-              {/* Link Input & Copy */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  ลิงก์เข้าใช้งานสำหรับเด็ก (คัดลอกส่งต่อได้ทันที):
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={playerLink}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-mono text-slate-800 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-xs shrink-0"
-                  >
-                    {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                    <span>{copiedLink ? 'คัดลอกแล้ว!' : 'คัดลอกลิงก์'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* LINE Share Action */}
-              <button
-                type="button"
-                onClick={handleShareToLine}
-                className="w-full py-3.5 px-4 rounded-2xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>📲 ส่งลิงก์เข้าแชท LINE ให้ลูกหรือส่งให้คนในบ้าน</span>
-              </button>
-            </div>
-          )}
-
-          {/* TAB 4: DEPLOY GUIDE */}
+          {/* ========================================================
+              TAB 5: แนะนำวิธีอัปเดตไฟล์ GitHub
+              ======================================================== */}
           {activeTab === 'deploy' && (
-            <div className="space-y-4 text-xs">
-              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 leading-relaxed">
-                <div className="flex items-center gap-1.5 font-bold mb-1">
-                  <Smartphone className="w-4 h-4 text-amber-700" />
-                  <span>ทำบนโทรศัพท์แอนดรอยด์ได้ 100% โดยไม่ต้องใช้คอมพิวเตอร์!</span>
-                </div>
-                ระบบเตรียมไฟล์ <strong>vercel.json</strong> และปรับโครงสร้าง Vite Build ให้พร้อมแล้ว สามารถอัปขึ้น Vercel ได้โดยไม่มี Error
+            <div className="space-y-4 text-xs text-slate-700 leading-relaxed bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                <Github className="w-4 h-4 text-slate-800" />
+                <h4 className="font-bold text-sm text-slate-900">
+                  แนะนำไฟล์และโฟลเดอร์ที่ควรอัปเดตใน GitHub
+                </h4>
               </div>
 
               <div className="space-y-3">
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
-                  <h5 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                    <Github className="w-4 h-4" />
-                    <span>ขั้นตอนที่ 1: นำโค้ดขึ้น GitHub (บนมือถือ)</span>
-                  </h5>
-                  <ol className="list-decimal list-inside space-y-1.5 text-slate-600 pl-1 leading-relaxed">
-                    <li>ดาวน์โหลดไฟล์ Source Code <strong>.ZIP</strong> จากแท็บแรกของหน้านี้</li>
-                    <li>ใช้แอปจัดการไฟล์ในมือถือ (Files / ZArchiver) แตกไฟล์ ZIP ออกมา</li>
-                    <li>เปิด Chrome บนมือถือ เข้าเว็บ <strong>github.com</strong> แล้วล็อกอิน</li>
-                    <li>กดปุ่มเครื่องหมายบวก <strong>"+" ➔ "New repository"</strong></li>
-                    <li>ตั้งชื่อ Repository เช่น <code className="bg-slate-200 px-1 rounded">little-hero-chore-quest</code> แล้วกด Create</li>
-                    <li>กดปุ่ม <strong>"uploading an existing file"</strong> ลากหรือเลือกไฟล์ทั้งหมดที่แตกออกมาอัปโหลดขึ้นไป แล้วกด <strong>Commit changes</strong></li>
-                  </ol>
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+                  <h5 className="font-bold mb-1">📁 โฟลเดอร์ที่ 1: `src/utils/` (สำคัญมากสำหรับกล้องและการทำงาน)</h5>
+                  <ul className="list-disc list-inside space-y-1 text-slate-700">
+                    <li><code className="font-bold text-indigo-700">watermark.ts</code>: แก้ปัญหากล้องหมุนนานและประทับเวลาล้มเหลว</li>
+                    <li><code className="font-bold text-indigo-700">storage.ts</code>: รหัสแอดมิน 0992256601 + ระบบ User Link และกำหนดวันหมดอายุ</li>
+                  </ul>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
-                  <h5 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                    <Globe className="w-4 h-4 text-indigo-600" />
-                    <span>ขั้นตอนที่ 2: ผูกเข้ากับ Vercel (ฟรี & อัตโนมัติ)</span>
-                  </h5>
-                  <ol className="list-decimal list-inside space-y-1.5 text-slate-600 pl-1 leading-relaxed">
-                    <li>เข้าเว็บ <strong>vercel.com</strong> บนมือถือ และล็อกอินด้วยบัญชี GitHub</li>
-                    <li>กดปุ่ม <strong>"Add New..." ➔ "Project"</strong></li>
-                    <li>เลือก Repository <code className="bg-slate-200 px-1 rounded">little-hero-chore-quest</code> ที่เพิ่งสร้าง แล้วกด <strong>Import</strong></li>
-                    <li>
-                      ระบบจะตรวจจับ Framework เป็น <strong>Vite</strong> อัตโนมัติ (มีไฟล์ <code className="bg-slate-200 px-1 rounded">vercel.json</code> รองรับแล้ว)
-                    </li>
-                    <li>กดปุ่ม <strong>"Deploy"</strong> รอประมาณ 30 วินาที จะได้โดเมน <code className="bg-emerald-100 text-emerald-800 px-1 rounded font-bold">.vercel.app</code> ที่ใช้งานได้ทั่วโลกทันที!</li>
-                  </ol>
+                <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-900">
+                  <h5 className="font-bold mb-1">📁 โฟลเดอร์ที่ 2: `src/components/`</h5>
+                  <ul className="list-disc list-inside space-y-1 text-slate-700">
+                    <li><code className="font-bold text-indigo-700">ParentPinModal.tsx</code>: รหัสแอดมิน 0992256601 แบบซ่อนรหัสเวลาพิมพ์</li>
+                    <li><code className="font-bold text-indigo-700">CameraSubmitModal.tsx</code>: แก้ไขระบบถ่ายรูปส่งงาน ไม่หมุนค้าง</li>
+                    <li><code className="font-bold text-indigo-700">HeroOnboardingModal.tsx</code>: ถ่ายรูปโปรไฟล์และเซลฟี่กล้องหน้า</li>
+                    <li><code className="font-bold text-indigo-700">ChoreQueueModal.tsx</code>: ปุ่มลบภารกิจ</li>
+                    <li><code className="font-bold text-indigo-700">SharePlayerLinkModal.tsx</code>: แอดมินสร้าง User, Password, วันหมดอายุ</li>
+                  </ul>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
-          <span className="text-[11px] text-slate-500 font-mono">
-            {APP_REVISION.sourceName}
+        {/* Modal Bottom Footer */}
+        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+          <span className="text-[11px] text-slate-500">
+            ระบบแอดมินสำหรับผู้ปกครอง • ป้องกันการโหลดซอร์สโค้ดจากโหมดเด็ก
           </span>
           <button
+            type="button"
             onClick={onClose}
-            className="py-2 px-5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition"
+            className="py-2 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow transition"
           >
             ปิดหน้าต่าง
           </button>

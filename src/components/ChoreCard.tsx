@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ChoreTask } from '../types/chore';
-import { Clock, CheckCircle, Camera, Eye, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle, Camera, Eye, Trash2, AlertCircle } from 'lucide-react';
 import { soundManager } from '../utils/soundEffects';
 
 interface Props {
@@ -20,6 +20,7 @@ export const ChoreCard: React.FC<Props> = ({
   onDelete,
   isParentMode,
 }) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isCompleted = task.status === 'completed';
   const isParentApproved = Boolean(task.parentApproved);
 
@@ -92,7 +93,7 @@ export const ChoreCard: React.FC<Props> = ({
           : 'bg-white border-amber-100/90 shadow-md shadow-amber-900/5 hover:border-amber-300 hover:shadow-lg hover:shadow-amber-900/10'
       }`}
     >
-      {/* Top ribbon: Status badge + stars badge */}
+      {/* Top ribbon: Status badge + stars badge + delete */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <span
           className={`text-xs px-2.5 py-1 rounded-xl border flex items-center gap-1.5 transition ${status.color}`}
@@ -107,17 +108,50 @@ export const ChoreCard: React.FC<Props> = ({
             <span>⭐</span>
           </span>
 
-          {isParentMode && onDelete && (
+          {onDelete && (
             <button
-              onClick={() => onDelete(task.id)}
-              className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition"
-              title="ลบภารกิจนี้"
+              onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
+              className={`p-1.5 rounded-lg transition ${
+                showDeleteConfirm
+                  ? 'bg-rose-600 text-white'
+                  : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50'
+              }`}
+              title="ลบภารกิจนี้ (หากมากเกินไป)"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
       </div>
+
+      {/* Delete confirmation strip */}
+      {showDeleteConfirm && onDelete && (
+        <div className="mb-3 p-2.5 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-2 animate-fade-in">
+          <span className="text-xs font-bold text-rose-800 flex items-center gap-1">
+            <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+            <span>ลบภารกิจนี้?</span>
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              className="px-2 py-1 rounded-lg text-xs font-semibold bg-white text-slate-700 border border-slate-200"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onDelete(task.id);
+                setShowDeleteConfirm(false);
+              }}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 text-white shadow-xs hover:bg-rose-700"
+            >
+              ยืนยันลบ
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main chore info */}
       <div className="flex items-start gap-3.5 mb-4">
