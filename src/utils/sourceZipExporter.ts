@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import { APP_REVISION } from '../config/revision';
 import sourceZipExporterRaw from './sourceZipExporter.ts?raw';
 
-// Embedded root configuration files
+// Embedded root configuration files (inlined so build never fails if root dotfiles like .gitignore or .env are omitted on GitHub)
 const packageJsonRaw = `{
   "name": "react-example",
   "private": true,
@@ -101,16 +101,22 @@ const vercelJsonRaw = `{
   "framework": "vite",
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }`;
 
 const indexHtmlRaw = `<!doctype html>
 <html lang="th">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Little Hero Chore Quest - ฮีโร่ตัวจิ๋วพิชิตงานบ้าน</title>
-    <meta name="description" content="เกมภารกิจงานบ้านสำหรับเด็ก สะสมดาว ปลดล็อกไอเทม และแชร์ผลงานผ่าน LINE พร้อมระบบประทับเวลาจริง" />
+    <meta name="description" content="เว็บแอปพลิเคชันสำหรับเด็กทำงานบ้าน มีเลือกภารกิจ กำหนดเวลา ถ่ายรูปประทับเวลาอัตโนมัติ และสะสมดาว" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Kanit:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -140,7 +146,7 @@ const npmrcRaw = `legacy-peer-deps=true`;
 const readmeRaw = `# Little Hero Chore Quest
 เว็บแอปพลิเคชันฮีโร่ตัวจิ๋วพิชิตงานบ้าน`;
 
-// Glob all source files in src directory
+// Glob all source files in src directory (using root-relative /src/**/* so src/utils is never missed)
 const srcTextFiles = import.meta.glob<string>(
   '/src/**/*.{ts,tsx,css,json}',
   { query: '?raw', import: 'default', eager: true }
@@ -159,6 +165,9 @@ export interface SourceFileInfo {
   sizeBytes?: number;
 }
 
+/**
+ * Get a flat list of all project files for in-app viewing and copying
+ */
 export function getSourceFileList(): SourceFileInfo[] {
   const files: SourceFileInfo[] = [
     { path: 'package.json', category: 'config', content: packageJsonRaw, sizeBytes: packageJsonRaw.length },
@@ -174,6 +183,7 @@ export function getSourceFileList(): SourceFileInfo[] {
   ];
 
   for (const [key, content] of Object.entries(srcTextFiles)) {
+    // Normalise path from '/src/...' to 'src/...'
     const cleanPath = key.replace(/^\//, '');
     files.push({
       path: cleanPath,
@@ -183,6 +193,7 @@ export function getSourceFileList(): SourceFileInfo[] {
     });
   }
 
+  // Ensure file #8 sourceZipExporter.ts is always included
   if (!files.some((f) => f.path === 'src/utils/sourceZipExporter.ts')) {
     files.push({
       path: 'src/utils/sourceZipExporter.ts',
@@ -203,9 +214,13 @@ export function getSourceFileList(): SourceFileInfo[] {
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/**
+ * Packages all project files into a complete, standalone .ZIP archive
+ */
 export async function generateFullSourceZip(onProgress?: (percent: number, currentFile: string) => void): Promise<Blob> {
   const zip = new JSZip();
 
+  // Explicitly create all directory entries so Android/iOS/Windows extractors always create folders
   zip.folder('src');
   zip.folder('src/utils');
   zip.folder('src/components');
@@ -214,6 +229,7 @@ export async function generateFullSourceZip(onProgress?: (percent: number, curre
   zip.folder('src/assets');
   zip.folder('src/assets/images');
 
+  // 1. Add Root Configuration & Docs
   zip.file('package.json', packageJsonRaw);
   zip.file('vercel.json', vercelJsonRaw);
   zip.file('vite.config.ts', viteConfigRaw);
@@ -228,6 +244,7 @@ export async function generateFullSourceZip(onProgress?: (percent: number, curre
   const totalSrcFiles = Object.keys(srcTextFiles).length + Object.keys(srcImageFiles).length + 10;
   let processed = 10;
 
+  // 2. Add all src text files (.ts, .tsx, .css, .json)
   for (const [key, content] of Object.entries(srcTextFiles)) {
     const cleanPath = key.replace(/^\//, '');
     zip.file(cleanPath, content);
@@ -237,8 +254,10 @@ export async function generateFullSourceZip(onProgress?: (percent: number, curre
     }
   }
 
+  // Ensure file #8 sourceZipExporter.ts is added to zip
   zip.file('src/utils/sourceZipExporter.ts', sourceZipExporterRaw);
 
+  // 3. Fetch and add binary images
   for (const [key, url] of Object.entries(srcImageFiles)) {
     const cleanPath = key.replace(/^\//, '');
     try {
@@ -246,7 +265,7 @@ export async function generateFullSourceZip(onProgress?: (percent: number, curre
       const arrayBuffer = await response.arrayBuffer();
       zip.file(cleanPath, arrayBuffer, { binary: true });
     } catch {
-      // ignore
+      // Fallback: continue if an image fails to fetch
     }
     processed++;
     if (onProgress) {
@@ -258,6 +277,7 @@ export async function generateFullSourceZip(onProgress?: (percent: number, curre
     onProgress(90, 'กำลังบีบอัดไฟล์ ZIP...');
   }
 
+  // 4. Generate ZIP blob
   const zipBlob = await zip.generateAsync(
     {
       type: 'blob',
@@ -274,6 +294,9 @@ export async function generateFullSourceZip(onProgress?: (percent: number, curre
   return zipBlob;
 }
 
+/**
+ * Triggers a direct download of the full source code ZIP in the user's browser
+ */
 export async function downloadFullSourceZip(onProgress?: (percent: number, currentFile: string) => void): Promise<string> {
   const blob = await generateFullSourceZip(onProgress);
   const zipFileName = `${APP_REVISION.sourceName}-full-source.zip`;
@@ -290,8 +313,12 @@ export async function downloadFullSourceZip(onProgress?: (percent: number, curre
   return zipFileName;
 }
 
+/**
+ * Triggers a direct download of only the src/utils folder as a ZIP
+ */
 export async function downloadUtilsOnlyZip(): Promise<string> {
   const zip = new JSZip();
+  // Create explicit folder "utils" and "src/utils"
   const utilsFolder = zip.folder('utils');
   const srcUtilsFolder = zip.folder('src/utils');
 
@@ -308,6 +335,7 @@ export async function downloadUtilsOnlyZip(): Promise<string> {
     }
   }
 
+  // Ensure file #8 sourceZipExporter.ts is added to utils zip
   if (utilsFolder) {
     utilsFolder.file('sourceZipExporter.ts', sourceZipExporterRaw);
   }
@@ -334,6 +362,9 @@ export async function downloadUtilsOnlyZip(): Promise<string> {
   return zipFileName;
 }
 
+/**
+ * Directly downloads a single text file (e.g. storage.ts) into the user's browser/phone
+ */
 export function downloadSingleTextFile(filename: string, content: string): void {
   const blob = new Blob([content], { type: 'text/typescript;charset=utf-8' });
   const downloadUrl = URL.createObjectURL(blob);
