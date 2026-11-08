@@ -1,7 +1,8 @@
 import JSZip from 'jszip';
 import { APP_REVISION } from '../config/revision';
+import sourceZipExporterRaw from './sourceZipExporter.ts?raw';
 
-// Root configuration templates (inlined so build never fails if root dotfiles like .gitignore or .env are omitted on GitHub)
+// Embedded root configuration files
 const packageJsonRaw = `{
   "name": "react-example",
   "private": true,
@@ -100,22 +101,16 @@ const vercelJsonRaw = `{
   "framework": "vite",
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  "outputDirectory": "dist"
 }`;
 
 const indexHtmlRaw = `<!doctype html>
 <html lang="th">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Little Hero Chore Quest - ฮีโร่ตัวจิ๋วพิชิตงานบ้าน</title>
-    <meta name="description" content="เว็บแอปพลิเคชันสำหรับเด็กทำงานบ้าน มีเลือกภารกิจ กำหนดเวลา ถ่ายรูปประทับเวลาอัตโนมัติ และสะสมดาว" />
+    <meta name="description" content="เกมภารกิจงานบ้านสำหรับเด็ก สะสมดาว ปลดล็อกไอเทม และแชร์ผลงานผ่าน LINE พร้อมระบบประทับเวลาจริง" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Kanit:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -147,16 +142,13 @@ const readmeRaw = `# Little Hero Chore Quest
 
 // Glob all source files in src directory
 const srcTextFiles = import.meta.glob<string>(
-  [
-    '../*.{ts,tsx,css}',
-    '../**/*.{ts,tsx,css,json}',
-  ],
+  '/src/**/*.{ts,tsx,css,json}',
   { query: '?raw', import: 'default', eager: true }
 );
 
 // Glob all image assets in src/assets/images
 const srcImageFiles = import.meta.glob<string>(
-  '../assets/images/*.{jpg,jpeg,png,webp,svg}',
+  '/src/assets/**/*.{jpg,jpeg,png,webp,svg}',
   { query: '?url', import: 'default', eager: true }
 );
 
@@ -182,7 +174,7 @@ export function getSourceFileList(): SourceFileInfo[] {
   ];
 
   for (const [key, content] of Object.entries(srcTextFiles)) {
-    const cleanPath = key.replace(/^\.\.\//, 'src/');
+    const cleanPath = key.replace(/^\//, '');
     files.push({
       path: cleanPath,
       category: 'source',
@@ -191,8 +183,17 @@ export function getSourceFileList(): SourceFileInfo[] {
     });
   }
 
+  if (!files.some((f) => f.path === 'src/utils/sourceZipExporter.ts')) {
+    files.push({
+      path: 'src/utils/sourceZipExporter.ts',
+      category: 'source',
+      content: sourceZipExporterRaw,
+      sizeBytes: sourceZipExporterRaw.length,
+    });
+  }
+
   for (const key of Object.keys(srcImageFiles)) {
-    const cleanPath = key.replace(/^\.\.\//, 'src/');
+    const cleanPath = key.replace(/^\//, '');
     files.push({
       path: cleanPath,
       category: 'asset',
@@ -204,6 +205,14 @@ export function getSourceFileList(): SourceFileInfo[] {
 
 export async function generateFullSourceZip(onProgress?: (percent: number, currentFile: string) => void): Promise<Blob> {
   const zip = new JSZip();
+
+  zip.folder('src');
+  zip.folder('src/utils');
+  zip.folder('src/components');
+  zip.folder('src/config');
+  zip.folder('src/types');
+  zip.folder('src/assets');
+  zip.folder('src/assets/images');
 
   zip.file('package.json', packageJsonRaw);
   zip.file('vercel.json', vercelJsonRaw);
@@ -220,7 +229,7 @@ export async function generateFullSourceZip(onProgress?: (percent: number, curre
   let processed = 10;
 
   for (const [key, content] of Object.entries(srcTextFiles)) {
-    const cleanPath = key.replace(/^\.\.\//, 'src/');
+    const cleanPath = key.replace(/^\//, '');
     zip.file(cleanPath, content);
     processed++;
     if (onProgress) {
@@ -228,14 +237,16 @@ export async function generateFullSourceZip(onProgress?: (percent: number, curre
     }
   }
 
+  zip.file('src/utils/sourceZipExporter.ts', sourceZipExporterRaw);
+
   for (const [key, url] of Object.entries(srcImageFiles)) {
-    const cleanPath = key.replace(/^\.\.\//, 'src/');
+    const cleanPath = key.replace(/^\//, '');
     try {
       const response = await fetch(url);
       const arrayBuffer = await response.arrayBuffer();
       zip.file(cleanPath, arrayBuffer, { binary: true });
     } catch {
-      // Continue if asset fetch fails
+      // ignore
     }
     processed++;
     if (onProgress) {
@@ -281,17 +292,27 @@ export async function downloadFullSourceZip(onProgress?: (percent: number, curre
 
 export async function downloadUtilsOnlyZip(): Promise<string> {
   const zip = new JSZip();
-  const utilsFolder = zip.folder('src/utils');
+  const utilsFolder = zip.folder('utils');
+  const srcUtilsFolder = zip.folder('src/utils');
 
   for (const [key, content] of Object.entries(srcTextFiles)) {
-    const cleanPath = key.replace(/^\.\.\//, 'src/');
+    const cleanPath = key.replace(/^\//, '');
     if (cleanPath.startsWith('src/utils/')) {
       const filename = cleanPath.replace('src/utils/', '');
       if (utilsFolder) {
         utilsFolder.file(filename, content);
       }
-      zip.file(filename, content);
+      if (srcUtilsFolder) {
+        srcUtilsFolder.file(filename, content);
+      }
     }
+  }
+
+  if (utilsFolder) {
+    utilsFolder.file('sourceZipExporter.ts', sourceZipExporterRaw);
+  }
+  if (srcUtilsFolder) {
+    srcUtilsFolder.file('sourceZipExporter.ts', sourceZipExporterRaw);
   }
 
   const zipBlob = await zip.generateAsync({
