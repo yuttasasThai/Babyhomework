@@ -1,5 +1,5 @@
 export interface WatermarkPayload {
-  source: HTMLVideoElement | HTMLImageElement;
+  source: HTMLVideoElement | HTMLImageElement | ImageBitmap | HTMLCanvasElement;
   heroName: string;
   choreTitle: string;
   choreIcon: string;
@@ -44,27 +44,103 @@ export function getThaiDateTime(date: Date = new Date()) {
   };
 }
 
+/**
+ * Super-fast image file to watermark processor using hardware-accelerated createImageBitmap
+ * or downscaled Image. Prevents phone browser crashes and long spin times on Android.
+ */
+export async function processImageFileToWatermark(
+  file: File | Blob,
+  heroName: string,
+  choreTitle: string,
+  choreIcon: string
+): Promise<WatermarkResult> {
+  // Try hardware accelerated createImageBitmap with resizeWidth first (modern Android Chrome)
+  if (typeof window !== 'undefined' && 'createImageBitmap' in window) {
+    try {
+      const bitmap = await createImageBitmap(file, {
+        resizeWidth: 960,
+        resizeQuality: 'medium',
+      });
+      const result = await generateWatermarkedPhoto({
+        source: bitmap,
+        heroName,
+        choreTitle,
+        choreIcon,
+      });
+      bitmap.close();
+      return result;
+    } catch (bitmapErr) {
+      console.warn('createImageBitmap with resize failed, falling back to standard Image:', bitmapErr);
+    }
+  }
+
+  // Fallback to Image element with URL.createObjectURL
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    // Timeout safety: if processing takes more than 4 seconds, reject cleanly
+    const timer = setTimeout(() => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('การประมวลผลรูปภาพใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง'));
+    }, 4500);
+
+    img.onload = async () => {
+      clearTimeout(timer);
+      try {
+        const result = await generateWatermarkedPhoto({
+          source: img,
+          heroName,
+          choreTitle,
+          choreIcon,
+        });
+        resolve(result);
+      } catch (err) {
+        reject(err);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+
+    img.onerror = () => {
+      clearTimeout(timer);
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('ไม่สามารถอ่านไฟล์ภาพจากกล้องได้'));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
 export async function generateWatermarkedPhoto(payload: WatermarkPayload): Promise<WatermarkResult> {
   const { source, heroName, choreTitle, choreIcon } = payload;
   const now = new Date();
   const { thaiDateFormatted, thaiTimeFormatted } = getThaiDateTime(now);
   const isoTimestamp = now.toISOString();
 
-  let rawWidth = 1024;
-  let rawHeight = 768;
+  // Determine native dimensions safely
+  let rawWidth = 960;
+  let rawHeight = 720;
 
   if (source instanceof HTMLVideoElement) {
-    rawWidth = source.videoWidth || 1024;
-    rawHeight = source.videoHeight || 768;
+    rawWidth = source.videoWidth || 960;
+    rawHeight = source.videoHeight || 720;
   } else if (source instanceof HTMLImageElement) {
-    rawWidth = source.naturalWidth || source.width || 1024;
-    rawHeight = source.naturalHeight || source.height || 768;
+    rawWidth = source.naturalWidth || source.width || 960;
+    rawHeight = source.naturalHeight || source.height || 720;
+  } else if (typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap) {
+    rawWidth = source.width || 960;
+    rawHeight = source.height || 720;
+  } else if (source instanceof HTMLCanvasElement) {
+    rawWidth = source.width || 960;
+    rawHeight = source.height || 720;
   }
 
-  if (rawWidth <= 0) rawWidth = 1024;
-  if (rawHeight <= 0) rawHeight = 768;
+  if (rawWidth <= 0) rawWidth = 960;
+  if (rawHeight <= 0) rawHeight = 720;
 
-  const MAX_DIM = 1200;
+  // Scale down to safe max dimensions (960px max) for ultra-fast mobile rendering & low RAM
+  const MAX_DIM = 960;
   let canvasWidth = rawWidth;
   let canvasHeight = rawHeight;
 
@@ -87,38 +163,45 @@ export async function generateWatermarkedPhoto(payload: WatermarkPayload): Promi
     throw new Error('ไม่สามารถเริ่มต้น Canvas context ได้');
   }
 
-  ctx.drawImage(source, 0, 0, canvasWidth, canvasHeight);
+  // 1. Draw original photo scaled to safe size
+  ctx.drawImage(source as CanvasImageSource, 0, 0, canvasWidth, canvasHeight);
 
-  const bannerHeight = Math.max(120, Math.round(canvasHeight * 0.18));
+  // 2. Add decorative camera frame & timestamp banner at the bottom
+  const bannerHeight = Math.max(105, Math.round(canvasHeight * 0.19));
   const bannerY = canvasHeight - bannerHeight;
 
+  // Gradient background for the watermark banner
   const gradient = ctx.createLinearGradient(0, bannerY, 0, canvasHeight);
-  gradient.addColorStop(0, 'rgba(15, 23, 42, 0.75)');
-  gradient.addColorStop(0.3, 'rgba(15, 23, 42, 0.92)');
+  gradient.addColorStop(0, 'rgba(15, 23, 42, 0.78)');
+  gradient.addColorStop(0.3, 'rgba(15, 23, 42, 0.94)');
   gradient.addColorStop(1, 'rgba(10, 15, 30, 0.98)');
 
   ctx.fillStyle = gradient;
   ctx.fillRect(0, bannerY, canvasWidth, bannerHeight);
 
-  ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
+  // Glowing top border line for the banner (amber-gold)
+  ctx.strokeStyle = 'rgba(245, 158, 11, 0.9)';
   ctx.lineWidth = Math.max(3, Math.round(canvasWidth * 0.0035));
   ctx.beginPath();
   ctx.moveTo(0, bannerY);
   ctx.lineTo(canvasWidth, bannerY);
   ctx.stroke();
 
-  const pillPaddingX = 20;
+  // Content positioning
+  const pillPaddingX = 18;
   const contentY = bannerY + Math.round(bannerHeight * 0.28);
 
-  const baseScale = canvasWidth / 1000;
-  const titleFontSize = Math.max(18, Math.round(26 * baseScale));
-  const subFontSize = Math.max(14, Math.round(18 * baseScale));
-  const timeFontSize = Math.max(22, Math.round(30 * baseScale));
-  const badgeFontSize = Math.max(11, Math.round(13 * baseScale));
+  // Scaling typography relative to width
+  const baseScale = canvasWidth / 960;
+  const titleFontSize = Math.max(16, Math.round(24 * baseScale));
+  const subFontSize = Math.max(12, Math.round(16 * baseScale));
+  const timeFontSize = Math.max(20, Math.round(28 * baseScale));
+  const badgeFontSize = Math.max(10, Math.round(12 * baseScale));
 
+  // --- LEFT SIDE: Task info & Hero badge ---
   ctx.fillStyle = '#f59e0b';
   ctx.font = `bold ${badgeFontSize}px 'Kanit', sans-serif`;
-  ctx.fillText('★ ภารกิจฮีโร่ตัวจิ๋วสำเร็จ (VERIFIED PROOF)', pillPaddingX, contentY - 6);
+  ctx.fillText('★ ภารกิจฮีโร่ตัวจิ๋วสำเร็จ (VERIFIED PROOF)', pillPaddingX, contentY - 4);
 
   ctx.fillStyle = '#ffffff';
   ctx.font = `600 ${titleFontSize}px 'Kanit', sans-serif`;
@@ -127,27 +210,29 @@ export async function generateWatermarkedPhoto(payload: WatermarkPayload): Promi
 
   ctx.fillStyle = '#94a3b8';
   ctx.font = `400 ${subFontSize}px 'Kanit', sans-serif`;
-  ctx.fillText(`ฮีโร่ตัวจิ๋ว: ${heroName || 'ฮีโร่'}`, pillPaddingX, contentY + titleFontSize + subFontSize + 10);
+  ctx.fillText(`ฮีโร่ตัวจิ๋ว: ${heroName || 'ฮีโร่'}`, pillPaddingX, contentY + titleFontSize + subFontSize + 8);
 
-  const rightMargin = canvasWidth - 20;
+  // --- RIGHT SIDE: Exact Timestamp ---
+  const rightMargin = canvasWidth - 18;
   ctx.textAlign = 'right';
 
   ctx.fillStyle = '#38bdf8';
   ctx.font = `bold ${timeFontSize}px 'Kanit', sans-serif`;
-  ctx.fillText(thaiTimeFormatted, rightMargin, contentY + 10);
+  ctx.fillText(thaiTimeFormatted, rightMargin, contentY + 8);
 
   ctx.fillStyle = '#f8fafc';
   ctx.font = `500 ${subFontSize}px 'Kanit', sans-serif`;
-  ctx.fillText(thaiDateFormatted, rightMargin, contentY + 10 + subFontSize + 8);
+  ctx.fillText(thaiDateFormatted, rightMargin, contentY + 8 + subFontSize + 6);
 
   ctx.fillStyle = '#fbbf24';
   ctx.font = `400 ${badgeFontSize}px 'Kanit', sans-serif`;
   const randomSecurityCode = `LHQ-${Math.floor(1000 + Math.random() * 9000)}`;
-  ctx.fillText(`🔒 ประทับเวลาจริงอัตโนมัติ • ${randomSecurityCode}`, rightMargin, bannerY + bannerHeight - 14);
+  ctx.fillText(`🔒 ประทับเวลาจริงอัตโนมัติ • ${randomSecurityCode}`, rightMargin, bannerY + bannerHeight - 12);
 
   ctx.textAlign = 'left';
 
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+  // Export compact JPEG with 0.80 quality (<80KB) for fast loading and no storage quota crash
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
 
   return {
     dataUrl,

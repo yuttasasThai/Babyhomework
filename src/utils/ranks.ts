@@ -99,6 +99,7 @@ export function getHeroRank(
   monthlyScore: number;
   monthlyTarget: number;
 } {
+  // Monthly target: 1 chore = 1 star (e.g. 3 chores/day * 30 days = 90 stars)
   const monthlyTarget = Math.max(30, dailyTaskCount * daysInMonth);
   const currentRank = HERO_RANKS.slice().reverse().find((r) => stars >= r.minStars) || HERO_RANKS[0];
   const nextRank = HERO_RANKS.find((r) => r.level === currentRank.level + 1) || null;

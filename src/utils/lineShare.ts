@@ -25,6 +25,7 @@ ${verifyUrl}
 
 (กดดูรูปและกดตรวจผ่าน เพื่อมอบดาวพิเศษเป็นกำลังใจให้ลูกกันเถอะ ⭐)`;
 
+  // LINE Social Share URL Scheme (Opens LINE app directly on Android / iOS / Web)
   const lineAppUrl = `https://line.me/R/msg/text/?${encodeURIComponent(messageText)}`;
 
   return {
@@ -37,6 +38,7 @@ ${verifyUrl}
 export async function shareToLine(task: ChoreTask, profile: HeroProfile): Promise<boolean> {
   const { messageText, verifyUrl, lineAppUrl } = generateLineShareMessage(task, profile);
 
+  // If mobile navigator.share is available, try it first
   if (navigator.share && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
     try {
       await navigator.share({
@@ -46,10 +48,11 @@ export async function shareToLine(task: ChoreTask, profile: HeroProfile): Promis
       });
       return true;
     } catch {
-      // Fallback to direct LINE URL
+      // User cancelled or fallback to LINE URL
     }
   }
 
+  // Direct LINE protocol
   window.open(lineAppUrl, '_blank');
   return true;
 }

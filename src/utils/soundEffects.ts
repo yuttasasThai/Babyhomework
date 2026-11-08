@@ -104,27 +104,28 @@ class SoundManager {
     }
   }
 
-  playAlarmBeep() {
+  playCameraShutter() {
     if (!this.enabled) return;
     try {
       const ctx = this.getContext();
       if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Click snap sound
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-
       osc.type = 'square';
-      const now = ctx.currentTime;
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.setValueAtTime(1046.5, now + 0.1);
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(100, now + 0.06);
 
       gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start(now);
-      osc.stop(now + 0.26);
+      osc.stop(now + 0.07);
     } catch {
       // Fallback
     }
