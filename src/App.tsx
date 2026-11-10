@@ -14,6 +14,9 @@ import {
   saveTasks,
   saveLogs,
   saveRewards,
+  decodeUserToken,
+  renewUserToken,
+  UserTokenPayload,
 } from './utils/storage';
 import { soundManager } from './utils/soundEffects';
 import { fireHeroConfetti } from './utils/confetti';
@@ -55,10 +58,17 @@ export default function App() {
   const [isPlayerOnlyMode, setIsPlayerOnlyMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      return params.get('mode') === 'player' || params.get('mode') === 'kid';
+      return params.get('mode') === 'player' || params.get('mode') === 'kid' || Boolean(params.get('playerToken'));
     }
     return false;
   });
+
+  // User Token & Expiry States
+  const [tokenPayload, setTokenPayload] = useState<UserTokenPayload | null>(null);
+  const [isTokenExpired, setIsTokenExpired] = useState<boolean>(false);
+  const [renewalInput, setRenewalInput] = useState<string>('');
+  const [renewalMessage, setRenewalMessage] = useState<string | null>(null);
+  const [welcomeBanner, setWelcomeBanner] = useState<string | null>(null);
 
   // Modals state
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
@@ -92,6 +102,67 @@ export default function App() {
       }
     }
   }, [tasks]);
+
+  // Check URL query for ?playerToken=<token> with expiration & remote phone sync
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('playerToken');
+      if (token) {
+        const decoded = decodeUserToken(token);
+        if (decoded.payload) {
+          setTokenPayload(decoded.payload);
+          if (decoded.isExpired) {
+            setIsTokenExpired(true);
+            soundManager.playContactAdminVoice();
+          } else {
+            setIsPlayerOnlyMode(true);
+
+            // Requirement 1: เคลียร์ล้างข้อมูลตั้งต้นเพื่อให้ user ที่ใช้งานสร้างข้อมูลของตัวเอง
+            const lastActiveToken = localStorage.getItem('chore_hero_active_player_token');
+            if (lastActiveToken !== token) {
+              localStorage.setItem('chore_hero_active_player_token', token);
+              saveLogs([]);
+              setLogs([]);
+            }
+
+            if (decoded.payload.profile) {
+              setProfile(decoded.payload.profile);
+              saveProfile(decoded.payload.profile);
+            }
+            if (decoded.payload.tasks && decoded.payload.tasks.length > 0) {
+              setTasks(decoded.payload.tasks);
+              saveTasks(decoded.payload.tasks);
+            }
+            setWelcomeBanner(`🌟 ยินดีต้อนรับฮีโร่ ${decoded.payload.heroName}! ใช้งานได้ถึง ${decoded.payload.validUntilFormatted}`);
+            setTimeout(() => setWelcomeBanner(null), 9000);
+          }
+        }
+      }
+    }
+  }, []);
+
+  // Unlock / Renew expired token with passcode
+  const handleUnlockRenewal = () => {
+    if (!tokenPayload) return;
+    const cleanInput = renewalInput.trim().toUpperCase();
+    if (cleanInput === tokenPayload.passcode.toUpperCase()) {
+      soundManager.playSuccessFanfare();
+      fireHeroConfetti();
+      const renewed = renewUserToken(tokenPayload.passcode, 30);
+      if (renewed) {
+        setTokenPayload(renewed);
+      }
+      setIsTokenExpired(false);
+      setIsPlayerOnlyMode(true);
+      setRenewalMessage(null);
+      setWelcomeBanner(`🎉 ต่ออายุสำเร็จแล้ว! ใช้งานได้ถึง ${renewed?.validUntilFormatted || 'อีก 30 วัน'}`);
+      setTimeout(() => setWelcomeBanner(null), 9000);
+    } else {
+      soundManager.playStarPop();
+      setRenewalMessage('รหัสต่ออายุไม่ถูกต้อง กรุณาติดต่อคุณพ่อคุณแม่');
+    }
+  };
 
   // Periodic alarm checker: checks current time against scheduled tasks every 20 seconds
   useEffect(() => {
@@ -203,14 +274,12 @@ export default function App() {
     saveTasks(updated);
   };
 
-  // Handle deleting a chore (in parent mode)
+  // Handle deleting a chore
   const handleDeleteChore = (taskId: string) => {
-    if (window.confirm('ต้องการลบภารกิจนี้ใช่หรือไม่?')) {
-      const updated = tasks.filter((t) => t.id !== taskId);
-      setTasks(updated);
-      saveTasks(updated);
-      soundManager.playStarPop();
-    }
+    const updated = tasks.filter((t) => t.id !== taskId);
+    setTasks(updated);
+    saveTasks(updated);
+    soundManager.playStarPop();
   };
 
   // Handle submitting chore proof with watermark
@@ -401,6 +470,20 @@ export default function App() {
           setActiveAlarmTask(null);
         }}
       />
+
+      {/* User Token Welcome & Expiry Notification Banner */}
+      {welcomeBanner && (
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 text-center text-xs sm:text-sm font-bold shadow-md flex items-center justify-center gap-2 animate-fade-in">
+          <span>{welcomeBanner}</span>
+          <button
+            type="button"
+            onClick={() => setWelcomeBanner(null)}
+            className="p-1 rounded-md hover:bg-white/20 transition text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 space-y-6 sm:space-y-8">
@@ -612,7 +695,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Share Player Link & GitHub/Vercel Guide Modal */}
+      {/* Share Player Link & GitHub/Vercel Guide Modal (Admin Only) */}
       <SharePlayerLinkModal
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}
@@ -620,16 +703,92 @@ export default function App() {
         tasks={tasks}
         logs={logs}
         rewards={rewards}
+        isPlayerOnlyMode={isPlayerOnlyMode}
       />
 
-      {/* Parent Security PIN Keypad Modal */}
+      {/* Requirement 3: Expiry Screen Modal ("หมดอายุใช้งาน ต้องการใช้งาน ติดต่อ admin ช่างหน่อยชุมแพ 099-2256601") */}
+      {isTokenExpired && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full text-center space-y-4 border-2 border-rose-400 shadow-2xl">
+            <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-3xl shadow-inner animate-bounce">
+              ⚠️
+            </div>
+
+            <div className="space-y-2">
+              <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-black uppercase tracking-wider">
+                แจ้งเตือนระบบ
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-rose-600 font-display">
+                หมดอายุใช้งาน
+              </h3>
+
+              {/* Requirement 3: ข้อความตามที่ระบุชัดเจน */}
+              <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-slate-900 text-sm sm:text-base font-bold leading-relaxed shadow-xs">
+                "หมดอายุใช้งาน ต้องการใช้งาน ติดต่อ admin ช่างหน่อยชุมแพ 099-2256601"
+              </div>
+
+              <p className="text-xs text-slate-500">
+                ลิงก์สำหรับ {tokenPayload?.userName || tokenPayload?.heroName || 'ผู้ใช้'} หมดอายุเมื่อ {tokenPayload?.validUntilFormatted}
+              </p>
+            </div>
+
+            {/* Quick Contact buttons */}
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <a
+                href="tel:0992256601"
+                className="py-3 px-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-rose-600/25 transition active:scale-95"
+              >
+                <span>📞 โทร 099-2256601</span>
+              </a>
+              <a
+                href="https://line.me/ti/p/~0992256601"
+                target="_blank"
+                rel="noreferrer"
+                className="py-3 px-3 rounded-2xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition active:scale-95"
+              >
+                <span>💬 ทัก LINE แอดมิน</span>
+              </a>
+            </div>
+
+            {/* Renewal passcode unlock */}
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <p className="text-xs text-slate-500 font-medium">
+                หรือกรอกรหัสต่ออายุ (หากได้รับจาก Admin แล้ว):
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={renewalInput}
+                  onChange={(e) => setRenewalInput(e.target.value.toUpperCase())}
+                  placeholder="รหัสต่ออายุ เช่น HERO-8821"
+                  className="flex-1 px-3 py-2.5 rounded-xl border border-slate-300 text-center font-mono font-bold text-xs uppercase outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleUnlockRenewal}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition active:scale-95 shrink-0"
+                >
+                  ปลดล็อก
+                </button>
+              </div>
+              {renewalMessage && (
+                <p className="text-xs font-bold text-rose-600 animate-shake">
+                  {renewalMessage}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Parent Security PIN Keypad Modal (Requirement 2: รหัส 099-2252601) */}
       <ParentPinModal
         isOpen={showParentPinModal}
         onClose={() => {
           setShowParentPinModal(false);
           setPinSuccessCallback(null);
         }}
-        correctPin={profile.parentPin || '1234'}
+        correctPin="099-2252601"
         onSuccess={() => {
           if (pinSuccessCallback) {
             pinSuccessCallback();
