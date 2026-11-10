@@ -118,19 +118,19 @@ export const HeaderHeroBar: React.FC<Props> = ({
           {/* Zone 3: Profile & Controls */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Download Full Source ZIP & Share Button */}
-            {/* Admin Hub: User Link Generator & Source - Only visible in Admin Mode, NEVER in User/Player Mode */}
-            {onOpenShareLink && !isPlayerOnlyMode && (
+            {/* Admin Hub: User Link Generator & Source (Requires PIN 099-2252601) */}
+            {onOpenShareLink && (
               <button
                 type="button"
                 onClick={() => {
                   soundManager.playStarPop();
                   onOpenShareLink();
                 }}
-                title="สร้างลิงก์ User กำหนดวันหมดอายุ & โหลด Source Code"
+                title="ใส่รหัสผ่านแอดมิน (099-2252601) เพื่อเข้าสู่เมนูแอดมิน"
                 className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 active:scale-95"
               >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">สร้างลิงก์ User / แอดมิน</span>
+                <Lock className="w-3.5 h-3.5 text-amber-300" />
+                <span className="hidden sm:inline">แอดมิน (ใส่รหัส)</span>
                 <span className="sm:hidden">แอดมิน</span>
               </button>
             )}

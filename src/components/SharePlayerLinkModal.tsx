@@ -500,31 +500,104 @@ ${link}
                     </div>
                   </div>
 
-                  {/* Expiry Duration Selection */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>กำหนดวันหมดอายุ</span>
+                  {/* Expiry Duration Selection with Custom Days Input */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>กำหนดวันหมดอายุ</span>
+                      </span>
+                      <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                        {expiryDays} วัน
+                      </span>
                     </label>
-                    <div className="grid grid-cols-4 gap-1">
-                      {[7, 15, 30, 90].map((days) => (
+
+                    {/* Quick Preset Buttons (7 วัน, 15 วัน, 30 วัน / 1 เดือน, 90 วัน, 365 วัน / 1 ปี) */}
+                    <div className="grid grid-cols-5 gap-1">
+                      {[
+                        { label: '7 วัน', days: 7 },
+                        { label: '15 วัน', days: 15 },
+                        { label: '30 วัน (1ด)', days: 30 },
+                        { label: '90 วัน', days: 90 },
+                        { label: '1 ปี', days: 365 },
+                      ].map((item) => (
                         <button
-                          key={days}
+                          key={item.days}
                           type="button"
                           onClick={() => {
-                            setExpiryDays(days);
+                            setExpiryDays(item.days);
                             soundManager.playStarPop();
                           }}
-                          className={`py-2 rounded-xl text-xs font-bold border transition ${
-                            expiryDays === days
+                          className={`py-1.5 rounded-xl text-[11px] font-bold border transition ${
+                            expiryDays === item.days
                               ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                               : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                           }`}
                         >
-                          {days}ว
+                          {item.label}
                         </button>
                       ))}
                     </div>
+
+                    {/* ช่องกำหนดจำนวนวันเองได้ (Custom Days Input) */}
+                    <div className="p-2 rounded-xl bg-white border-2 border-indigo-200 flex items-center justify-between gap-2 shadow-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[11px] font-bold text-slate-700 whitespace-nowrap">✏️ กำหนดวันเอง:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="3650"
+                          value={expiryDays}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            setExpiryDays(isNaN(val) || val < 1 ? 1 : Math.min(val, 3650));
+                          }}
+                          className="w-16 px-2 py-1 rounded-lg border border-indigo-300 text-center font-mono font-bold text-xs bg-indigo-50/50 outline-none focus:border-indigo-600 focus:bg-white text-indigo-900"
+                        />
+                        <span className="text-xs font-bold text-slate-600">วัน</span>
+                      </div>
+
+                      {/* Quick Stepper buttons */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setExpiryDays((prev) => Math.max(1, prev - 1))}
+                          className="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center transition active:scale-95"
+                          title="ลด 1 วัน"
+                        >
+                          -1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpiryDays((prev) => Math.min(3650, prev + 1))}
+                          className="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center transition active:scale-95"
+                          title="เพิ่ม 1 วัน"
+                        >
+                          +1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpiryDays((prev) => Math.min(3650, prev + 10))}
+                          className="px-1.5 h-6 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center transition border border-indigo-200"
+                          title="เพิ่ม 10 วัน"
+                        >
+                          +10
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpiryDays((prev) => Math.min(3650, prev + 30))}
+                          className="px-1.5 h-6 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] flex items-center justify-center transition shadow-xs"
+                          title="เพิ่ม 30 วัน"
+                        >
+                          +30
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expiration date live preview */}
+                    <p className="text-[11px] text-indigo-800 font-medium">
+                      📅 หมดอายุ: {formatThaiDate(new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000))}
+                    </p>
                   </div>
                 </div>
 
@@ -535,7 +608,7 @@ ${link}
                   className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-sm shadow-md shadow-indigo-500/20 transition active:scale-98 flex items-center justify-center gap-2 font-display"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>⚡ สร้างลิงก์ User: {userNameInput || 'น้องอาชิ'} (อายุ {expiryDays} วัน)</span>
+                  <span>⚡ สร้างลิงก์ User: {userNameInput || 'น้องอาชิ'} (กำหนดใช้งาน {expiryDays} วัน)</span>
                 </button>
               </div>
 
