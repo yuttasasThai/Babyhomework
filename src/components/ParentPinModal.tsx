@@ -17,20 +17,28 @@ export const ParentPinModal: React.FC<Props> = ({
   correctPin,
   onSuccess,
   title = 'ล็อกความปลอดภัยโหมดแอดมิน / ผู้ปกครอง',
-  description = 'กรุณาใส่รหัสผ่านแอดมินเพื่อเข้าถึงการตั้งค่าและสร้างลิงก์ (รหัสแอดมิน: 0992256601)',
+  description = 'กรุณาใส่รหัสผ่านแอดมิน (รหัสแอดมิน: 099-2252601)',
 }) => {
   const [password, setPassword] = useState<string>('');
-  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isError, setIsError] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   if (!isOpen) return null;
 
-  const MASTER_ADMIN_PASSWORD = '0992256601';
-
   const handleVerify = (inputPassword: string) => {
     const trimmed = inputPassword.trim();
-    if (trimmed === MASTER_ADMIN_PASSWORD || trimmed === correctPin || trimmed === '1234') {
+    const digitsOnly = trimmed.replace(/[^0-9]/g, '');
+
+    // Accept 099-2252601, 0992252601, 099-2256601, 0992256601 or custom parentPin
+    if (
+      digitsOnly === '0992252601' ||
+      digitsOnly === '0992256601' ||
+      trimmed === '099-2252601' ||
+      trimmed === '099-2256601' ||
+      trimmed === correctPin ||
+      digitsOnly === correctPin.replace(/[^0-9]/g, '') ||
+      trimmed === '1234'
+    ) {
       soundManager.playSuccessFanfare();
       onSuccess();
       onClose();
@@ -46,15 +54,16 @@ export const ParentPinModal: React.FC<Props> = ({
     }
   };
 
-  const handleKeyPress = (digit: string) => {
+  const handleKeyPress = (char: string) => {
     if (password.length >= 16) return;
-    const nextPassword = password + digit;
+    const nextPassword = password + char;
     setPassword(nextPassword);
     soundManager.playStarPop();
     setIsError(false);
 
-    // Auto verify if reached exactly 10 digits and matches master password
-    if (nextPassword === MASTER_ADMIN_PASSWORD) {
+    // Auto verify if matched 10 digits
+    const digits = nextPassword.replace(/[^0-9]/g, '');
+    if (digits === '0992252601' || digits === '0992256601') {
       handleVerify(nextPassword);
     }
   };
@@ -101,32 +110,25 @@ export const ParentPinModal: React.FC<Props> = ({
             </p>
           </div>
 
-          {/* Form with Masked Password Input ("ไม่ต้องแสดงรหัสเวลาพิมพ์") */}
+          {/* Form with Strictly Masked Password Input ("ไม่ต้องแสดงรหัสเวลาพิมพ์") */}
           <form onSubmit={handleFormSubmit} className="space-y-3">
             <div className="relative max-w-[260px] mx-auto">
               <input
-                type={showPassword ? 'text' : 'password'}
+                type="password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   setIsError(false);
                 }}
                 autoFocus
+                autoComplete="off"
                 placeholder="••••••••••"
-                className={`w-full py-3 px-4 pr-10 rounded-2xl border-2 text-center text-lg font-mono font-bold tracking-widest outline-none transition ${
+                className={`w-full py-3 px-4 rounded-2xl border-2 text-center text-xl font-mono font-bold tracking-widest outline-none transition ${
                   isError
                     ? 'border-rose-500 bg-rose-50/50 text-rose-600 animate-shake'
                     : 'border-indigo-300 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 bg-slate-50 text-slate-900'
                 }`}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                title={showPassword ? 'ซ่อนรหัส' : 'แสดงรหัส'}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
             </div>
 
             {isError ? (
@@ -134,8 +136,8 @@ export const ParentPinModal: React.FC<Props> = ({
                 {errorMessage || 'รหัสผ่านไม่ถูกต้อง'}
               </p>
             ) : (
-              <p className="text-[11px] text-slate-400">
-                🔒 ป้องกันการมองเห็นรหัสเวลาพิมพ์
+              <p className="text-[11px] text-slate-400 font-medium">
+                🔒 ซ่อนรหัสผ่านเป็นจุด ไม่แสดงตัวเลขเวลาพิมพ์
               </p>
             )}
 

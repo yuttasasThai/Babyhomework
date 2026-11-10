@@ -12,6 +12,7 @@ import {
   getActiveUserTokens,
   renewUserToken,
   deleteUserToken,
+  formatThaiDate,
   UserTokenPayload,
 } from '../utils/storage';
 import { soundManager } from '../utils/soundEffects';
@@ -73,6 +74,16 @@ export const SharePlayerLinkModal: React.FC<Props> = ({
   const [lastGeneratedPayload, setLastGeneratedPayload] = useState<UserTokenPayload | null>(null);
   const [lastGeneratedLink, setLastGeneratedLink] = useState<string | null>(null);
 
+  // Acknowledged expired tokens state (Requirement 4)
+  const [acknowledgedExpiredPasscodes, setAcknowledgedExpiredPasscodes] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('chore_hero_ack_expired_tokens');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Full ZIP download state
   const [isZipping, setIsZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
@@ -90,12 +101,26 @@ export const SharePlayerLinkModal: React.FC<Props> = ({
   // Load existing tokens on open
   useEffect(() => {
     if (isOpen) {
-      setActiveTokens(getActiveUserTokens());
+      const tokens = getActiveUserTokens();
+      setActiveTokens(tokens);
       if (!userNameInput) {
         setUserNameInput(profile.nickname || 'น้องอาชิ');
       }
     }
   }, [isOpen, profile.nickname]);
+
+  // Requirement 4: Unacknowledged expired tokens
+  const unacknowledgedExpiredTokens = activeTokens.filter(
+    (t) => Date.now() > t.validUntil && !acknowledgedExpiredPasscodes.includes(t.passcode)
+  );
+
+  // Voice warning trigger when expired token is detected for admin
+  useEffect(() => {
+    if (isOpen && unacknowledgedExpiredTokens.length > 0) {
+      const names = unacknowledgedExpiredTokens.map((t) => t.userName || t.heroName).join(' และ ');
+      soundManager.playExpiredUserVoiceAlert(names);
+    }
+  }, [isOpen, unacknowledgedExpiredTokens.length]);
 
   if (!isOpen) return null;
 
@@ -107,7 +132,19 @@ export const SharePlayerLinkModal: React.FC<Props> = ({
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
   const selectedFile = fileList.find((f) => f.path === selectedFilePath) || fileList[0];
 
-  // Generate User Link with token and expiration
+  // Acknowledge expired alert popup
+  const handleAcknowledgeExpired = () => {
+    soundManager.playStarPop();
+    const updated = [...acknowledgedExpiredPasscodes, ...unacknowledgedExpiredTokens.map((t) => t.passcode)];
+    setAcknowledgedExpiredPasscodes(updated);
+    try {
+      localStorage.setItem('chore_hero_ack_expired_tokens', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  };
+
+  // Generate User Link with token and expiration (Requirement 1: เคลียร์ล้างข้อมูลทั้งหมด)
   const handleGenerateUserTokenLink = () => {
     soundManager.playSuccessFanfare();
     const finalUserName = userNameInput.trim() || profile.nickname || 'น้องอาชิ';
@@ -119,7 +156,8 @@ export const SharePlayerLinkModal: React.FC<Props> = ({
       expiryDays,
       finalPassword,
       finalUserName,
-      finalPassword
+      finalPassword,
+      true // เคลียร์ล้างข้อมูลทั้งหมดเพื่อให้ user ที่ใช้งานสร้างข้อมูลของตัวเอง
     );
 
     const fullLink = `${currentOrigin}?playerToken=${token}`;
@@ -566,100 +604,165 @@ ${link}
                 </div>
               )}
 
-              {/* Active Tokens & Renewal List */}
+              {/* Requirement 4: บันทึกลงตาราง (User Links Table) */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-                  <span>รายการลิงก์ User ที่สร้างไว้ & ปุ่มต่ออายุ ({activeTokens.length})</span>
-                  <span className="text-[11px] text-slate-500 font-normal">กดปุ่มเพื่อขยายเวลาหรือลบ</span>
-                </h4>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>📊 ตารางบันทึกรายชื่อ User Links ทั้งหมด ({activeTokens.length})</span>
+                      {activeTokens.some((t) => Date.now() > t.validUntil) && (
+                        <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full animate-pulse">
+                          ⚠️ มีลิงก์หมดอายุ
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      บันทึกประวัติการสร้าง User, รหัสผ่าน, วันหมดอายุ และปุ่มต่ออายุ
+                    </p>
+                  </div>
+                </div>
 
                 {activeTokens.length === 0 ? (
-                  <p className="text-xs text-slate-500 p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center">
-                    ยังไม่มีลิงก์ User ที่สร้างไว้ กดปุ่มสร้างด้านบนได้เลยครับ
-                  </p>
+                  <div className="text-xs text-slate-500 p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-center space-y-1">
+                    <p className="font-bold text-slate-700">ยังไม่มีประวัติการสร้างลิงก์ User ในตาราง</p>
+                    <p className="text-[11px]">เมื่อกดปุ่ม "สร้างลิงก์ User" ด้านบน ระบบจะบันทึกข้อมูลลงตารางนี้อัตโนมัติ</p>
+                  </div>
                 ) : (
-                  <div className="space-y-2.5">
-                    {activeTokens.map((tok) => {
-                      const isExpired = Date.now() > tok.validUntil;
-                      const daysLeft = Math.ceil((tok.validUntil - Date.now()) / (1000 * 60 * 60 * 24));
-                      const tokLink = `${currentOrigin}?playerToken=${btoa(encodeURIComponent(JSON.stringify(tok)))}`;
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-xs bg-white">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+                          <th className="py-2.5 px-3 text-center w-10">#</th>
+                          <th className="py-2.5 px-3">ชื่อผู้ใช้ (User Name)</th>
+                          <th className="py-2.5 px-3">รหัสผ่าน (Password)</th>
+                          <th className="py-2.5 px-3">วันที่สร้าง</th>
+                          <th className="py-2.5 px-3">วันหมดอายุ</th>
+                          <th className="py-2.5 px-3 text-center">สถานะ</th>
+                          <th className="py-2.5 px-3 text-center">ต่ออายุ</th>
+                          <th className="py-2.5 px-3 text-center">จัดการ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {activeTokens.map((tok, index) => {
+                          const isExpired = Date.now() > tok.validUntil;
+                          const daysLeft = Math.ceil((tok.validUntil - Date.now()) / (1000 * 60 * 60 * 24));
+                          const tokLink = `${currentOrigin}?playerToken=${btoa(encodeURIComponent(JSON.stringify(tok)))}`;
 
-                      return (
-                        <div
-                          key={tok.passcode}
-                          className={`p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                            isExpired
-                              ? 'bg-rose-50/60 border-rose-200 text-rose-900'
-                              : 'bg-white border-slate-200 text-slate-800 shadow-xs'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
-                                👤 {tok.userName || tok.heroName}
-                              </span>
-                              <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded-md text-slate-900">
-                                🔑 {tok.passcode}
-                              </span>
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  isExpired
-                                    ? 'bg-rose-200 text-rose-800'
-                                    : 'bg-emerald-100 text-emerald-800'
-                                }`}
-                              >
-                                {isExpired ? 'หมดอายุแล้ว' : `ใช้งานได้ (เหลือ ${daysLeft} วัน)`}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-1">
-                              หมดอายุ: {tok.validUntilFormatted}
-                            </p>
-                          </div>
+                          return (
+                            <tr
+                              key={tok.passcode}
+                              className={`transition hover:bg-slate-50/80 ${
+                                isExpired ? 'bg-rose-50/50' : ''
+                              }`}
+                            >
+                              <td className="py-3 px-3 text-center font-bold text-slate-400">
+                                {index + 1}
+                              </td>
 
-                          {/* Renewal actions & Delete */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[11px] text-slate-500 font-semibold mr-1">ต่ออายุ:</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRenewToken(tok.passcode, 7)}
-                              className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 transition"
-                            >
-                              +7 วัน
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRenewToken(tok.passcode, 30)}
-                              className="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition shadow-xs"
-                            >
-                              +30 วัน
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRenewToken(tok.passcode, 90)}
-                              className="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[11px] font-bold border border-purple-200 transition"
-                            >
-                              +90 วัน
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyLink(tokLink)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition"
-                              title="คัดลอกลิงก์"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteToken(tok.passcode)}
-                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition"
-                              title="ลบลิงก์นี้"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                              <td className="py-3 px-3">
+                                <span className="font-bold text-indigo-900 flex items-center gap-1">
+                                  👤 {tok.userName || tok.heroName}
+                                </span>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-1 font-mono font-bold text-slate-800">
+                                  <span>{tok.passcode}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyPasscode(tok.passcode)}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 transition"
+                                    title="คัดลอกรหัสผ่าน"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                                {tok.createdAtFormatted || formatThaiDate(new Date(tok.createdAt))}
+                              </td>
+
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <span className={isExpired ? 'font-bold text-rose-600' : 'text-slate-700'}>
+                                  {tok.validUntilFormatted}
+                                </span>
+                              </td>
+
+                              <td className="py-3 px-3 text-center whitespace-nowrap">
+                                {isExpired ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                    🔴 หมดอายุแล้ว
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    🟢 ใช้งานได้ ({daysLeft} วัน)
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-3 text-center whitespace-nowrap">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRenewToken(tok.passcode, 7)}
+                                    className="px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] border border-indigo-200 transition"
+                                    title="ขยายเวลาเพิ่ม 7 วัน"
+                                  >
+                                    +7ว
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRenewToken(tok.passcode, 30)}
+                                    className="px-2 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] shadow-xs transition"
+                                    title="ขยายเวลาเพิ่ม 30 วัน"
+                                  >
+                                    +30ว
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRenewToken(tok.passcode, 90)}
+                                    className="px-2 py-1 rounded-md bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[10px] border border-purple-200 transition"
+                                    title="ขยายเวลาเพิ่ม 90 วัน"
+                                  >
+                                    +90ว
+                                  </button>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3 text-center whitespace-nowrap">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyLink(tokLink)}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition"
+                                    title="คัดลอกลิงก์ใช้งาน"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleShareTokenToLine(tokLink, tok)}
+                                    className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition"
+                                    title="แชร์ลิงก์เข้า LINE"
+                                  >
+                                    <Share2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteToken(tok.passcode)}
+                                    className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition"
+                                    title="ลบข้อมูล User นี้"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -668,8 +771,7 @@ ${link}
               <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
                 <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <span>
-                  <strong>การันตีความปลอดภัย:</strong> ลิงก์ที่สร้างด้วยระบบนี้ จะนำเครื่องปลายทางเข้าสู่โหมดฮีโร่ตัวจิ๋ว (Player Mode) ทันที
-                  โดยจะ<strong>ไม่มีปุ่มดาวน์โหลด Source Code</strong>, ไม่มีหน้าดูไฟล์ระบบ และต้องใส่รหัสแอดมิน (0992256601) เท่านั้นจึงจะเข้าหน้าแอดมินได้
+                  <strong>การันตีความปลอดภัย & ข้อมูลแยกอิสระ:</strong> เมื่อสร้างลิงก์ User ใหม่ ระบบจะเคลียร์ล้างข้อมูลตั้งต้นให้เป็น 0 ดาว เพื่อให้ User ใหม่สร้างข้อมูลของตัวเอง โดยล็อกไม่ให้เข้าถึงการตั้งค่าแอดมิน และไม่มีปุ่มดาวน์โหลด Source Code
                 </span>
               </div>
             </div>
@@ -834,18 +936,19 @@ ${link}
                   <h5 className="font-bold mb-1">📁 โฟลเดอร์ที่ 1: `src/utils/` (สำคัญมากสำหรับกล้องและการทำงาน)</h5>
                   <ul className="list-disc list-inside space-y-1 text-slate-700">
                     <li><code className="font-bold text-indigo-700">watermark.ts</code>: แก้ปัญหากล้องหมุนนานและประทับเวลาล้มเหลว</li>
-                    <li><code className="font-bold text-indigo-700">storage.ts</code>: รหัสแอดมิน 0992256601 + ระบบ User Link และกำหนดวันหมดอายุ</li>
+                    <li><code className="font-bold text-indigo-700">storage.ts</code>: รหัสแอดมิน 099-2252601 + ล้างข้อมูลเริ่มใหม่ 0 ดาว + ตาราง User Link</li>
+                    <li><code className="font-bold text-indigo-700">soundEffects.ts</code>: เสียงเตือนผู้ใช้หมดอายุ และระบบเสียงสังเคราะห์ภาษาไทย</li>
                   </ul>
                 </div>
 
                 <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-900">
                   <h5 className="font-bold mb-1">📁 โฟลเดอร์ที่ 2: `src/components/`</h5>
                   <ul className="list-disc list-inside space-y-1 text-slate-700">
-                    <li><code className="font-bold text-indigo-700">ParentPinModal.tsx</code>: รหัสแอดมิน 0992256601 แบบซ่อนรหัสเวลาพิมพ์</li>
+                    <li><code className="font-bold text-indigo-700">ParentPinModal.tsx</code>: รหัสแอดมิน 099-2252601 แบบซ่อนรหัสเวลาพิมพ์</li>
                     <li><code className="font-bold text-indigo-700">CameraSubmitModal.tsx</code>: แก้ไขระบบถ่ายรูปส่งงาน ไม่หมุนค้าง</li>
                     <li><code className="font-bold text-indigo-700">HeroOnboardingModal.tsx</code>: ถ่ายรูปโปรไฟล์และเซลฟี่กล้องหน้า</li>
                     <li><code className="font-bold text-indigo-700">ChoreQueueModal.tsx</code>: ปุ่มลบภารกิจ</li>
-                    <li><code className="font-bold text-indigo-700">SharePlayerLinkModal.tsx</code>: แอดมินสร้าง User, Password, วันหมดอายุ</li>
+                    <li><code className="font-bold text-indigo-700">SharePlayerLinkModal.tsx</code>: ตารางบันทึก User, แจ้งเตือนหมดอายุพร้อมเสียง, ปุ่มกดรับทราบ</li>
                   </ul>
                 </div>
               </div>
@@ -867,6 +970,76 @@ ${link}
           </button>
         </div>
       </div>
+
+      {/* Requirement 4: Pop-up แจ้งเตือนเมื่อมี Link ไหนหมดอายุ ให้ Admin กดรับทราบหน้าต่างถึงจะหายไป */}
+      {unacknowledgedExpiredTokens.length > 0 && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center shadow-2xl border-2 border-rose-400 space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-3xl shadow-inner animate-bounce">
+              🚨
+            </div>
+
+            <div>
+              <span className="text-[11px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">
+                ระบบแจ้งเตือนแอดมิน
+              </span>
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 font-display mt-2">
+                พบ User หมดอายุการใช้งาน!
+              </h3>
+              <p className="text-xs text-slate-600 mt-1">
+                มีลิงก์ User ที่สร้างไว้หมดอายุแล้ว {unacknowledgedExpiredTokens.length} รายการ พร้อมเสียงแจ้งเตือน
+              </p>
+            </div>
+
+            {/* Expired list */}
+            <div className="space-y-2 max-h-48 overflow-y-auto p-1">
+              {unacknowledgedExpiredTokens.map((tok) => (
+                <div
+                  key={tok.passcode}
+                  className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-left flex items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-xs text-rose-900">
+                        👤 {tok.userName || tok.heroName}
+                      </span>
+                      <span className="font-mono text-[11px] bg-white px-1.5 py-0.5 rounded border border-rose-200 text-slate-700">
+                        🔑 {tok.passcode}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-rose-600 mt-0.5">
+                      หมดอายุเมื่อ: {tok.validUntilFormatted}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRenewToken(tok.passcode, 30)}
+                    className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition shrink-0"
+                  >
+                    +30 วัน
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Button: รับทราบหน้าต่างถึงจะหายไป */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleAcknowledgeExpired}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-black text-sm shadow-md shadow-rose-600/30 transition active:scale-98 flex items-center justify-center gap-2 font-display"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>กดรับทราบ (Acknowledge)</span>
+              </button>
+              <p className="text-[11px] text-slate-400 mt-2">
+                เมื่อกดรับทราบ หน้าต่างเตือนนี้จะหายไป และสามารถกดต่ออายุในตารางได้ตลอดเวลา
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
