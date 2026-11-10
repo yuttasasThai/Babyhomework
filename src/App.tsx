@@ -261,6 +261,14 @@ export default function App() {
     }
   };
 
+  // Safe handler to open Admin Hub (ALWAYS requires PIN 099-2252601 first!)
+  const handleOpenAdminHub = () => {
+    setPinSuccessCallback(() => () => {
+      setShowShareModal(true);
+    });
+    setShowParentPinModal(true);
+  };
+
   // Handle Adding Chore
   const handleAddChore = (newChoreData: Omit<ChoreTask, 'id' | 'createdAt' | 'status'>) => {
     const newTask: ChoreTask = {
@@ -456,7 +464,7 @@ export default function App() {
         isParentMode={isParentMode}
         onToggleParentMode={handleToggleParentMode}
         onOpenLineGuide={() => setShowLineGuide(true)}
-        onOpenShareLink={() => setShowShareModal(true)}
+        onOpenShareLink={handleOpenAdminHub}
         isPlayerOnlyMode={isPlayerOnlyMode}
       />
 
