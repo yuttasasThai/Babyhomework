@@ -40,6 +40,7 @@ import { ParentApprovalModal } from './components/ParentApprovalModal';
 import { LineGuideModal } from './components/LineGuideModal';
 import { ParentPinModal } from './components/ParentPinModal';
 import { SharePlayerLinkModal } from './components/SharePlayerLinkModal';
+import { UserLoginModal } from './components/UserLoginModal';
 import { alarmManager } from './utils/alarmAudio';
 
 import { Plus, Filter, Sparkles, CheckCircle2, ListTodo, Calendar, Award, MessageCircle } from 'lucide-react';
@@ -69,6 +70,22 @@ export default function App() {
   const [renewalInput, setRenewalInput] = useState<string>('');
   const [renewalMessage, setRenewalMessage] = useState<string | null>(null);
   const [welcomeBanner, setWelcomeBanner] = useState<string | null>(null);
+
+  // User Login State (Requirement 1: link user ต้อง login ทุกครั้งก่อนเข้าโดยใส่รหัสผ่าน)
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('playerToken');
+      if (token) {
+        const decoded = decodeUserToken(token);
+        if (decoded.payload && !decoded.isExpired) {
+          const session = sessionStorage.getItem(`chore_user_session_${decoded.payload.passcode}`);
+          return session === 'authenticated';
+        }
+      }
+    }
+    return true;
+  });
 
   // Modals state
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
@@ -117,6 +134,8 @@ export default function App() {
             soundManager.playContactAdminVoice();
           } else {
             setIsPlayerOnlyMode(true);
+            const session = sessionStorage.getItem(`chore_user_session_${decoded.payload.passcode}`);
+            setIsUserLoggedIn(session === 'authenticated');
 
             // Requirement 1: เคลียร์ล้างข้อมูลตั้งต้นเพื่อให้ user ที่ใช้งานสร้างข้อมูลของตัวเอง
             const lastActiveToken = localStorage.getItem('chore_hero_active_player_token');
@@ -134,8 +153,10 @@ export default function App() {
               setTasks(decoded.payload.tasks);
               saveTasks(decoded.payload.tasks);
             }
-            setWelcomeBanner(`🌟 ยินดีต้อนรับฮีโร่ ${decoded.payload.heroName}! ใช้งานได้ถึง ${decoded.payload.validUntilFormatted}`);
-            setTimeout(() => setWelcomeBanner(null), 9000);
+            if (session === 'authenticated') {
+              setWelcomeBanner(`🌟 ยินดีต้อนรับฮีโร่ ${decoded.payload.heroName}! ใช้งานได้ถึง ${decoded.payload.validUntilFormatted}`);
+              setTimeout(() => setWelcomeBanner(null), 9000);
+            }
           }
         }
       }
@@ -237,28 +258,14 @@ export default function App() {
     }
   };
 
-  // Safe handler to open Manage Chores (asks PIN if in player mode)
+  // Safe handler to open Manage Chores (Requirement 3: link user ตั้งค่าปรับเพิ่มภารกิจได้เลยโดยไม่ต้องใส่รหัสผ่าน)
   const handleOpenManageChores = () => {
-    if (isPlayerOnlyMode && !isParentMode) {
-      setPinSuccessCallback(() => () => {
-        setShowAddChore(true);
-      });
-      setShowParentPinModal(true);
-    } else {
-      setShowAddChore(true);
-    }
+    setShowAddChore(true);
   };
 
-  // Safe handler to open Queue Settings (asks PIN if in player mode)
+  // Safe handler to open Queue Settings (Requirement 3: link user จัดคิวเวลาเตือนได้เลยโดยไม่ต้องใส่รหัสผ่าน)
   const handleOpenQueueSettings = () => {
-    if (isPlayerOnlyMode && !isParentMode) {
-      setPinSuccessCallback(() => () => {
-        setShowQueueModal(true);
-      });
-      setShowParentPinModal(true);
-    } else {
-      setShowQueueModal(true);
-    }
+    setShowQueueModal(true);
   };
 
   // Safe handler to open Admin Hub (ALWAYS requires PIN 099-2252601 first!)
@@ -267,6 +274,19 @@ export default function App() {
       setShowShareModal(true);
     });
     setShowParentPinModal(true);
+  };
+
+  // Handle Logout (Requirement 1 & 2: เมื่อออกจากระบบก็ให้ออกโดยสมบูรณ์ และเพิ่มปุ่มออกจากระบบ)
+  const handleLogout = () => {
+    soundManager.playStarPop();
+    if (tokenPayload) {
+      sessionStorage.removeItem(`chore_user_session_${tokenPayload.passcode}`);
+    }
+    sessionStorage.clear();
+    setIsUserLoggedIn(false);
+    setIsParentMode(false);
+    setWelcomeBanner('🚪 ออกจากระบบเรียบร้อยแล้ว');
+    setTimeout(() => setWelcomeBanner(null), 4000);
   };
 
   // Handle Adding Chore
@@ -290,9 +310,9 @@ export default function App() {
     soundManager.playStarPop();
   };
 
-  // Handle submitting chore proof with watermark
+  // Handle submitting chore proof with watermark (Requirement 4: ส่วนที่ 1 ได้รับ 1 ส่วน = +1 ดาว)
   const handleSubmitProof = (task: ChoreTask, watermarkResult: WatermarkResult) => {
-    // 1. Mark chore completed
+    // 1. Mark chore completed with Part 1 score
     const updatedTasks = tasks.map((t) => {
       if (t.id === task.id) {
         return {
@@ -301,6 +321,9 @@ export default function App() {
           completedAt: watermarkResult.isoTimestamp,
           completedTimeFormatted: watermarkResult.thaiTimeFormatted,
           proofPhotoUrl: watermarkResult.dataUrl,
+          submissionPartStars: 1,
+          chatVerifiedPartStars: 0,
+          isScoreFullyCompleted: false,
         };
       }
       return t;
@@ -319,17 +342,20 @@ export default function App() {
       thaiDateFormatted: watermarkResult.thaiDateFormatted,
       thaiTimeFormatted: watermarkResult.thaiTimeFormatted,
       proofPhotoUrl: watermarkResult.dataUrl,
-      starsEarned: task.starsReward,
+      starsEarned: 1, // คิดคะแนนจากงานที่ส่ง 1 ส่วน (+1 ดาว)
+      submissionPartStars: 1,
+      chatVerifiedPartStars: 0,
+      isScoreFullyCompleted: false,
       category: task.category,
     };
     const updatedLogs = [newLog, ...logs];
     setLogs(updatedLogs);
     saveLogs(updatedLogs);
 
-    // 3. Award stars & update streak in profile
+    // 3. Award Part 1 (+1 ดาว) & update streak in profile
     const updatedProfile: HeroProfile = {
       ...profile,
-      totalStars: profile.totalStars + task.starsReward,
+      totalStars: profile.totalStars + 1,
       lastActiveDate: new Date().toISOString().split('T')[0],
     };
     setProfile(updatedProfile);
@@ -341,24 +367,36 @@ export default function App() {
 
     // 5. Open Victory Modal
     setVictoryState({
-      task,
+      task: {
+        ...task,
+        status: 'completed',
+        completedAt: watermarkResult.isoTimestamp,
+        completedTimeFormatted: watermarkResult.thaiTimeFormatted,
+        proofPhotoUrl: watermarkResult.dataUrl,
+        submissionPartStars: 1,
+        chatVerifiedPartStars: 0,
+        isScoreFullyCompleted: false,
+      },
       watermark: watermarkResult,
     });
   };
 
-  // Handle Parent Approving Task & awarding bonus stars
+  // Handle Parent Approving Task & awarding Part 2 score (+1 ดาว จากการตรวจงานผ่าน Messenger/LINE)
   const handleApproveTask = (taskId: string, bonusStars: number, feedback: string) => {
     const nowIso = new Date().toISOString();
+    const verifiedBonus = bonusStars > 0 ? bonusStars : 1;
 
-    // 1. Update task
+    // 1. Update task with Part 2 score
     const updatedTasks = tasks.map((t) => {
       if (t.id === taskId) {
         return {
           ...t,
           parentApproved: true,
           parentApprovedAt: nowIso,
-          parentBonusStars: bonusStars,
+          parentBonusStars: verifiedBonus,
           parentFeedback: feedback,
+          chatVerifiedPartStars: verifiedBonus,
+          isScoreFullyCompleted: true,
         };
       }
       return t;
@@ -373,8 +411,11 @@ export default function App() {
           ...l,
           parentApproved: true,
           parentApprovedAt: nowIso,
-          parentBonusStars: bonusStars,
+          parentBonusStars: verifiedBonus,
           parentFeedback: feedback,
+          starsEarned: (l.starsEarned || 1) + verifiedBonus,
+          chatVerifiedPartStars: verifiedBonus,
+          isScoreFullyCompleted: true,
         };
       }
       return l;
@@ -382,10 +423,10 @@ export default function App() {
     setLogs(updatedLogs);
     saveLogs(updatedLogs);
 
-    // 3. Award extra bonus stars to kid's total stars!
+    // 3. Award extra Part 2 star (+1 ดาว) to kid's total stars!
     const updatedProfile: HeroProfile = {
       ...profile,
-      totalStars: profile.totalStars + bonusStars,
+      totalStars: profile.totalStars + verifiedBonus,
     };
     setProfile(updatedProfile);
     saveProfile(updatedProfile);
@@ -396,8 +437,10 @@ export default function App() {
         ...selectedTaskForApproval,
         parentApproved: true,
         parentApprovedAt: nowIso,
-        parentBonusStars: bonusStars,
+        parentBonusStars: verifiedBonus,
         parentFeedback: feedback,
+        chatVerifiedPartStars: verifiedBonus,
+        isScoreFullyCompleted: true,
       });
     }
   };
@@ -466,6 +509,7 @@ export default function App() {
         onOpenLineGuide={() => setShowLineGuide(true)}
         onOpenShareLink={handleOpenAdminHub}
         isPlayerOnlyMode={isPlayerOnlyMode}
+        onLogout={handleLogout}
       />
 
       {/* Periodic Repeating Chore Alarm Banner */}
@@ -788,6 +832,21 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Requirement 1: User Login Modal before entering user link */}
+      <UserLoginModal
+        isOpen={Boolean(tokenPayload && !isTokenExpired && !isUserLoggedIn)}
+        tokenPayload={tokenPayload}
+        profile={profile}
+        onSuccessLogin={() => {
+          if (tokenPayload) {
+            sessionStorage.setItem(`chore_user_session_${tokenPayload.passcode}`, 'authenticated');
+          }
+          setIsUserLoggedIn(true);
+          setWelcomeBanner(`🌟 ยินดีต้อนรับฮีโร่ ${tokenPayload?.heroName || profile.nickname}! เข้าสู่ระบบสำเร็จ`);
+          setTimeout(() => setWelcomeBanner(null), 6000);
+        }}
+      />
 
       {/* Parent Security PIN Keypad Modal (Requirement 2: รหัส 099-2252601) */}
       <ParentPinModal
