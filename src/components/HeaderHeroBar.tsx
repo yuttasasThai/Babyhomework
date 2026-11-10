@@ -1,6 +1,6 @@
 import React from 'react';
 import { HeroProfile } from '../types/chore';
-import { Volume2, VolumeX, ShieldCheck, UserCheck, Share2, Lock, Download, KeyRound } from 'lucide-react';
+import { Volume2, VolumeX, ShieldCheck, UserCheck, Share2, Lock, Download, KeyRound, LogOut } from 'lucide-react';
 import { soundManager } from '../utils/soundEffects';
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
   onOpenLineGuide?: () => void;
   onOpenShareLink?: () => void;
   isPlayerOnlyMode?: boolean;
+  onLogout?: () => void;
 }
 
 export const HeaderHeroBar: React.FC<Props> = ({
@@ -27,6 +28,7 @@ export const HeaderHeroBar: React.FC<Props> = ({
   onOpenLineGuide,
   onOpenShareLink,
   isPlayerOnlyMode,
+  onLogout,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-amber-100 shadow-sm">
@@ -223,6 +225,18 @@ export const HeaderHeroBar: React.FC<Props> = ({
                 </div>
               </div>
             </button>
+            {/* Logout Button (Requirement 2: เพิ่มปุ่มออกจากระบบ) */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                title="ออกจากระบบ (เคลียร์เซสชัน)"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition flex items-center gap-1 active:scale-95"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                <span className="hidden sm:inline">ออกจากระบบ</span>
+              </button>
+            )}
           </div>
         </div>
 

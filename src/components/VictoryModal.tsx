@@ -2,7 +2,8 @@ import React from 'react';
 import { ChoreTask, HeroProfile } from '../types/chore';
 import { WatermarkResult } from '../utils/watermark';
 import { soundManager } from '../utils/soundEffects';
-import { Sparkles, Star, Award, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Star, Award, CheckCircle2, MessageSquare, Send } from 'lucide-react';
+import { shareToLine, shareToMessenger } from '../utils/lineShare';
 
 interface Props {
   isOpen: boolean;
@@ -23,35 +24,45 @@ export const VictoryModal: React.FC<Props> = ({
 }) => {
   if (!isOpen) return null;
 
+  const handleShareLine = () => {
+    soundManager.playStarPop();
+    shareToLine(task, profile);
+  };
+
+  const handleShareMessenger = () => {
+    soundManager.playStarPop();
+    shareToMessenger(task, profile);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-fade-in">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-amber-300 text-center relative flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-amber-300 text-center relative flex flex-col max-h-[92vh]">
         {/* Confetti star flare header */}
-        <div className="bg-gradient-to-b from-amber-400 via-orange-400 to-rose-400 p-6 text-white relative overflow-hidden shrink-0">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 backdrop-blur-md rounded-3xl mb-3 text-4xl shadow-lg ring-4 ring-white/30 animate-pop-star">
+        <div className="bg-gradient-to-b from-amber-400 via-orange-400 to-rose-400 p-5 text-white relative overflow-hidden shrink-0">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl mb-2 text-3xl shadow-lg ring-4 ring-white/30 animate-pop-star">
             ⭐
           </div>
-          <div className="flex items-center justify-center gap-1.5 text-yellow-200 text-xs font-bold uppercase tracking-wider mb-1">
-            <Sparkles className="w-4 h-4" />
-            <span>ภารกิจสำเร็จเรียบร้อย!</span>
-            <Sparkles className="w-4 h-4" />
+          <div className="flex items-center justify-center gap-1.5 text-yellow-200 text-xs font-bold uppercase tracking-wider mb-0.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>ส่งงานเรียบร้อยแล้ว!</span>
+            <Sparkles className="w-3.5 h-3.5" />
           </div>
-          <h2 className="text-2xl font-black tracking-tight font-display">
+          <h2 className="text-xl font-black tracking-tight font-display">
             สุดยอดมาก {profile.nickname}!
           </h2>
-          <p className="text-amber-100 text-xs mt-1">
-            ได้รับ +{task.starsReward} ดาวสะสมเข้าคลังฮีโร่ทันที!
+          <p className="text-amber-100 text-xs mt-0.5">
+            ได้รับคะแนนส่วนที่ 1 (+1 ดาว) เข้าคลังฮีโร่ทันที!
           </p>
         </div>
 
         {/* Stamped Photo Proof Card */}
-        <div className="p-5 overflow-y-auto space-y-4 flex-1">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 flex-1">
           {watermarkResult && (
             <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-slate-900">
               <img
                 src={watermarkResult.dataUrl}
                 alt="Stamped Chore Proof"
-                className="w-full max-h-56 object-contain"
+                className="w-full max-h-48 object-contain"
               />
               <div className="absolute top-2 left-2 bg-emerald-500/90 text-white text-[11px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 backdrop-blur-sm">
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -60,23 +71,38 @@ export const VictoryModal: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Chore details banner */}
-          <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 flex items-center justify-between">
-            <div className="flex items-center gap-2.5 text-left">
-              <span className="text-3xl">{task.icon}</span>
-              <div>
-                <h4 className="font-bold text-slate-800 text-sm font-display">
-                  {task.title}
-                </h4>
-                <p className="text-xs text-slate-500">
-                  เวลาส่งงาน: {watermarkResult?.thaiTimeFormatted || 'เวลานี้'}
-                </p>
+          {/* 2-Part Scoring Card (Requirement 4) */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-300 text-left space-y-2">
+            <div className="flex items-center justify-between border-b border-amber-200/80 pb-1.5">
+              <span className="text-xs font-black text-slate-800 uppercase tracking-wider font-display">
+                ระบบคิดคะแนน 2 ส่วนสมบูรณ์
+              </span>
+              <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                เต็ม 2 ส่วน
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 shadow-xs">
+                <div className="flex items-center gap-1 font-bold text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>ส่วนที่ 1 (งานที่ส่ง)</span>
+                </div>
+                <p className="font-black text-sm text-emerald-700 mt-1">+1 ดาว (ได้รับแล้ว ✓)</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white border border-amber-300 text-amber-800 shadow-xs">
+                <div className="flex items-center gap-1 font-bold text-[11px]">
+                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                  <span>ส่วนที่ 2 (ตรวจงาน)</span>
+                </div>
+                <p className="font-black text-sm text-amber-600 mt-1">+1 ดาว (แชร์ส่งตรวจ)</p>
               </div>
             </div>
-            <div className="flex items-center gap-1 font-black text-amber-600 bg-white px-2.5 py-1.5 rounded-xl border border-amber-200 shadow-xs font-display">
-              <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
-              <span>+{task.starsReward}</span>
-            </div>
+
+            <p className="text-[11px] text-slate-600">
+              💡 ส่งงานผ่าน Facebook Messenger หรือ LINE ให้ผู้รับกดดูงาน เพื่อรับคะแนนส่วนที่ 2 อีก 1 ดาวสมบูรณ์
+            </p>
           </div>
 
           {/* Current total */}
@@ -88,20 +114,27 @@ export const VictoryModal: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer: Facebook Messenger & LINE Buttons */}
         <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0 space-y-2">
-          {onOpenParentApproval && (
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => {
-                soundManager.playStarPop();
-                onOpenParentApproval(task);
-              }}
-              className="w-full py-3 px-4 rounded-2xl bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-sm flex items-center justify-center gap-2 shadow-md shadow-[#06C755]/25 transition font-display"
+              onClick={handleShareMessenger}
+              className="py-2.5 px-3 rounded-2xl bg-[#0084FF] hover:bg-[#0074e0] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-[#0084FF]/25 transition active:scale-95 font-display"
             >
-              <span>📲 ส่งเข้า LINE พ่อแม่เพื่อตรวจงาน & รับดาวเพิ่ม ⭐</span>
+              <Send className="w-3.5 h-3.5" />
+              <span>แชร์ Messenger (+1⭐)</span>
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={handleShareLine}
+              className="py-2.5 px-3 rounded-2xl bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-[#06C755]/25 transition active:scale-95 font-display"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>แชร์ LINE (+1⭐)</span>
+            </button>
+          </div>
 
           <button
             type="button"
@@ -109,9 +142,9 @@ export const VictoryModal: React.FC<Props> = ({
               soundManager.playStarPop();
               onClose();
             }}
-            className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-sm shadow-md shadow-amber-500/25 hover:from-amber-600 hover:to-orange-600 active:scale-98 transition font-display"
+            className="w-full py-2.5 px-4 rounded-2xl bg-slate-800 text-white font-bold text-xs hover:bg-slate-900 active:scale-98 transition font-display"
           >
-            รับดาวสะสม แล้วลุยงานต่อไป! 🚀
+            ปิดหน้าต่าง แล้วลุยงานต่อไป 🚀
           </button>
         </div>
       </div>

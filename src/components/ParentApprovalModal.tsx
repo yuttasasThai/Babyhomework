@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChoreTask, HeroProfile } from '../types/chore';
-import { shareToLine, generateVerificationUrl } from '../utils/lineShare';
+import { shareToLine, shareToMessenger, generateVerificationUrl } from '../utils/lineShare';
 import { soundManager } from '../utils/soundEffects';
 import { fireHeroConfetti } from '../utils/confetti';
 import {
@@ -13,6 +13,7 @@ import {
   X,
   MessageCircle,
   Heart,
+  Send,
 } from 'lucide-react';
 
 interface Props {
@@ -55,6 +56,11 @@ export const ParentApprovalModal: React.FC<Props> = ({
   const handleSendToLine = () => {
     soundManager.playStarPop();
     shareToLine(task, profile);
+  };
+
+  const handleSendToMessenger = () => {
+    soundManager.playStarPop();
+    shareToMessenger(task, profile);
   };
 
   return (
@@ -128,6 +134,30 @@ export const ParentApprovalModal: React.FC<Props> = ({
             </div>
           </div>
 
+          {/* Two-part scoring badge */}
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-left space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-amber-900 font-display">
+                ระบบคิดคะแนน 2 ส่วนสมบูรณ์
+              </span>
+              <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                ส่วนที่ 1 + ส่วนที่ 2
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2 rounded-xl bg-white border border-emerald-300 text-emerald-800">
+                <span className="font-bold text-[11px] block">✓ ส่วนที่ 1: งานที่ส่ง</span>
+                <span className="font-bold text-xs text-emerald-600">+1 ดาว (สำเร็จแล้ว)</span>
+              </div>
+              <div className="p-2 rounded-xl bg-white border border-amber-300 text-amber-800">
+                <span className="font-bold text-[11px] block">⭐ ส่วนที่ 2: ตรวจงาน</span>
+                <span className="font-bold text-xs text-amber-600">
+                  {isAlreadyApproved ? '+1 ดาว (ตรวจแล้ว ✓)' : '+1 ดาว (รอกดรับรอง)'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Verification Status Card */}
           {isAlreadyApproved ? (
             <div className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-300 text-center space-y-2 animate-fade-in">
@@ -135,10 +165,10 @@ export const ParentApprovalModal: React.FC<Props> = ({
                 <Check className="w-6 h-6 stroke-[3]" />
               </div>
               <h4 className="font-bold text-emerald-900 text-base font-display">
-                คุณพ่อคุณแม่ตรวจรับงานเรียบร้อยแล้ว! 🏅
+                ตรวจรับงานและมอบคะแนนสมบูรณ์ครบ 2 ส่วนแล้ว! 🏅
               </h4>
               <p className="text-xs text-emerald-700">
-                อนุมัติดาวโบนัสพิเศษให้น้อง <strong className="font-bold">+{task.parentBonusStars || 1} ดาว</strong> ⭐
+                ได้รับคะแนนส่งงาน (+1 ดาว) และคะแนนตรวจงาน <strong className="font-bold">+{task.parentBonusStars || 1} ดาว</strong> รวมเป็นคะแนนเต็ม! ⭐⭐
               </p>
               {task.parentFeedback && (
                 <div className="p-2.5 rounded-xl bg-white/80 border border-emerald-200 text-xs text-emerald-800 italic mt-1">
@@ -151,37 +181,15 @@ export const ParentApprovalModal: React.FC<Props> = ({
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
-                  <span>เลือกจำนวนดาวโบนัสที่ต้องการมอบให้ลูก:</span>
+                  <span>มอบคะแนนส่วนที่ 2 ให้ลูก (+1 ดาวสมบูรณ์):</span>
                 </label>
-              </div>
-
-              {/* Bonus star selection */}
-              <div className="grid grid-cols-3 gap-2">
-                {[1, 2, 3].map((num) => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => {
-                      setBonusStars(num);
-                      soundManager.playStarPop();
-                    }}
-                    className={`py-2.5 px-3 rounded-xl border-2 text-xs font-black flex items-center justify-center gap-1.5 transition ${
-                      bonusStars === num
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-300'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>+{num}</span>
-                    <span>ดาว ⭐</span>
-                  </button>
-                ))}
               </div>
 
               {/* Praise message input */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
                   <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
-                  <span>คำชมจากคุณพ่อคุณแม่:</span>
+                  <span>คำชมจากคุณพ่อคุณแม่ / ผู้ตรวจงาน:</span>
                 </label>
                 <input
                   type="text"
@@ -198,39 +206,49 @@ export const ParentApprovalModal: React.FC<Props> = ({
                 onClick={handleApprove}
                 className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-black text-sm shadow-lg shadow-emerald-600/25 hover:brightness-105 active:scale-98 transition flex items-center justify-center gap-2 font-display min-h-[48px]"
               >
-                <span>⭐ ตรวจผ่าน & อนุมัติดาวพิเศษ (+{bonusStars} ดาว)</span>
+                <span>⭐ ตอบรับตรวจงาน & มอบคะแนนส่วนที่ 2 (+1 ดาว)</span>
               </button>
             </div>
           )}
 
-          {/* LINE Sharing Section */}
-          <div className="p-3.5 rounded-2xl bg-[#06C755]/10 border border-[#06C755]/30 space-y-2.5">
+          {/* Social Sharing Section (Facebook Messenger & LINE) */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#06C755] flex items-center gap-1.5">
-                <MessageCircle className="w-4 h-4 fill-[#06C755]" />
-                <span>แชร์เข้า LINE พ่อแม่เพื่อตรวจงาน</span>
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Share2 className="w-4 h-4 text-indigo-600" />
+                <span>แชร์ส่งต่อให้ผู้รับตรวจงาน</span>
               </span>
-              <span className="text-[10px] text-slate-500">1 คลิกเปิด LINE ทันที</span>
+              <span className="text-[10px] text-slate-500">Facebook Messenger หรือ LINE</span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleSendToMessenger}
+                className="py-2.5 px-3 rounded-xl bg-[#0084FF] hover:bg-[#0074e0] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>แชร์ Messenger</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleSendToLine}
-                className="flex-1 py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs"
+                className="py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs"
               >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>ส่งข้อความเข้าแชท LINE</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleCopyLink}
-                className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-1 transition"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'คัดลอกแล้ว' : 'คัดลอกลิงก์'}</span>
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>แชร์ LINE</span>
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200 flex items-center justify-center gap-1.5 transition"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'คัดลอกลิงก์ตรวจงานแล้ว!' : 'คัดลอกลิงก์ตรวจงาน'}</span>
+            </button>
           </div>
         </div>
 
