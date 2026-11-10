@@ -1,9 +1,9 @@
 export const APP_REVISION = {
-  version: '1.5.0',
-  revision: 'rev-20261109-02-admin-pin-required-custom-days',
+  version: '1.6.0',
+  revision: 'rev-20261109-03-user-login-logout-messenger-2part-score',
   releaseDate: '2026-11-09',
-  sourceName: 'little-hero-chore-quest-v1.5.0-admin-pin-required-and-custom-days',
-  buildTag: 'v1.5.0-admin-pin-and-custom-days-verified',
+  sourceName: 'little-hero-chore-quest-v1.6.0-user-login-logout-messenger-2part-score',
+  buildTag: 'v1.6.0-user-login-logout-messenger-2part-score-verified',
 };
 
 export function exportSourceBackupData(allData: Record<string, unknown>) {
