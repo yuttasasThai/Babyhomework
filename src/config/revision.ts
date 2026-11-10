@@ -1,9 +1,9 @@
 export const APP_REVISION = {
-  version: '1.3.2',
-  revision: 'rev-20261108-02-complete-8-utils-files-fix',
-  releaseDate: '2026-11-08',
-  sourceName: 'little-hero-chore-quest-v1.3.2-complete-8-utils-files',
-  buildTag: 'complete-8-utils-files-verified',
+  version: '1.4.0',
+  revision: 'rev-20261109-01-user-table-and-expiry-alert',
+  releaseDate: '2026-11-09',
+  sourceName: 'little-hero-chore-quest-v1.4.0-user-token-table-and-admin-expiry-alert',
+  buildTag: 'user-token-table-and-expiry-alert-verified',
 };
 
 export function exportSourceBackupData(allData: Record<string, unknown>) {
