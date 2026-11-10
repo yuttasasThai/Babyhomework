@@ -89,9 +89,11 @@ export interface UserTokenPayload {
   password?: string;
   validUntil: number; // epoch ms
   validUntilFormatted: string;
+  createdAt: number;
+  createdAtFormatted?: string;
+  isFreshUser?: boolean;
   profile: HeroProfile;
   tasks: ChoreTask[];
-  createdAt: number;
 }
 
 export function getStoredProfile(): HeroProfile {
@@ -104,9 +106,9 @@ export function getStoredProfile(): HeroProfile {
         parsed.avatarUrl = HERO_AVATARS[0].image;
         parsed.avatarId = HERO_AVATARS[0].id;
       }
-      // Ensure parent pin default to 0992256601
-      if (!parsed.parentPin || parsed.parentPin === '1234') {
-        parsed.parentPin = '0992256601';
+      // Ensure parent pin default to 099-2252601
+      if (!parsed.parentPin || parsed.parentPin === '1234' || parsed.parentPin === '0992256601') {
+        parsed.parentPin = '099-2252601';
       }
       return parsed;
     }
@@ -131,7 +133,7 @@ export function getStoredProfile(): HeroProfile {
     dreamRewardStars: 20,
     soundEnabled: true,
     dailyTaskTarget: 3,
-    parentPin: '0992256601',
+    parentPin: '099-2252601',
   };
   saveProfile(initialProfile);
   return initialProfile;
@@ -306,10 +308,6 @@ export function saveRewards(rewards: WishlistReward[]) {
   }
 }
 
-// ==========================================
-// USER TOKEN & EXPIRATION ENGINE
-// ==========================================
-
 export function formatThaiDate(date: Date): string {
   const months = [
     'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -320,7 +318,8 @@ export function formatThaiDate(date: Date): string {
 }
 
 /**
- * Creates an encoded user token containing quest data, userName, password, and expiration
+ * Creates an encoded user token.
+ * Requirement 1: เคลียร์ล้างข้อมูลทั้งหมดเพื่อให้ user ที่ใช้งานสร้างข้อมูลของตัวเอง
  */
 export function createUserToken(
   profile: HeroProfile,
@@ -328,37 +327,127 @@ export function createUserToken(
   daysValid: number,
   customPasscode?: string,
   customUserName?: string,
-  customPassword?: string
+  customPassword?: string,
+  clearDataForNewUser: boolean = true
 ): { token: string; payload: UserTokenPayload } {
   const now = Date.now();
   const validUntilMs = now + daysValid * 24 * 60 * 60 * 1000;
   const passcode = customPassword || customPasscode || `HERO-${Math.floor(1000 + Math.random() * 9000)}`;
   const validDate = new Date(validUntilMs);
-  const heroName = (customUserName && customUserName.trim()) || profile.nickname || 'น้องอาชิ';
+  const heroName = (customUserName && customUserName.trim()) || 'ฮีโร่ตัวจิ๋ว';
+
+  // 1) เคลียร์ล้างข้อมูลเพื่อเริ่มใหม่สำหรับ User นี้
+  let finalProfile: HeroProfile;
+  let finalTasks: ChoreTask[];
+
+  if (clearDataForNewUser) {
+    // ข้อมูลโปรไฟล์เริ่มต้นใหม่เอี่ยม: ดาว 0, ระดับขั้น 1, สถิติ 0 วัน, ให้สร้างข้อมูลเอง
+    finalProfile = {
+      id: `hero_user_${now}`,
+      nickname: heroName,
+      age: 7,
+      gender: 'boy',
+      avatarUrl: HERO_AVATARS[0].image,
+      avatarId: HERO_AVATARS[0].id,
+      isCustomPhoto: false,
+      heroRankLevel: 1, // ระดับขั้นที่ 1
+      totalStars: 0, // 0 ดาว สะสมใหม่ด้วยตัวเอง
+      currentStreak: 0, // เริ่มสถิติใหม่ 0 วัน
+      lastActiveDate: new Date().toISOString().split('T')[0],
+      dreamReward: '', // ให้ผู้ใช้ตั้งของรางวัลความฝันของตนเอง
+      dreamRewardStars: 20,
+      soundEnabled: true,
+      dailyTaskTarget: 3,
+      parentPin: undefined, // ล็อกโหมดแอดมิน
+    };
+
+    // ภารกิจตั้งต้นที่ยังไม่ได้ทำ (สถานะ pending ทั้งหมด ไม่มีรูปส่งงานค้าง)
+    finalTasks = [
+      {
+        id: `task-new-1`,
+        title: 'เก็บที่นอนให้เรียบร้อย',
+        category: 'bedroom',
+        icon: '🛏️',
+        color: 'teal',
+        scheduledTime: '07:30',
+        order: 1,
+        isDailyRoutine: true,
+        starsReward: 1,
+        status: 'pending',
+        notes: 'ดึงผ้าปูให้ตึง จัดหมอนให้ตรง',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: `task-new-2`,
+        title: 'ล้างจานชามอาหารเช้า',
+        category: 'kitchen',
+        icon: '🍽️',
+        color: 'emerald',
+        scheduledTime: '08:30',
+        order: 2,
+        isDailyRoutine: true,
+        starsReward: 1,
+        status: 'pending',
+        notes: 'ใช้น้ำยาล้างจาน ล้างให้สะอาด',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: `task-new-3`,
+        title: 'กรอกน้ำเย็นใส่ตู้เย็น',
+        category: 'kitchen',
+        icon: '💧',
+        color: 'blue',
+        scheduledTime: '13:00',
+        order: 3,
+        isDailyRoutine: true,
+        starsReward: 1,
+        status: 'pending',
+        notes: 'กรอกน้ำให้เต็มขวดและปิดฝาให้สนิท',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: `task-new-4`,
+        title: 'กวาดห้องนั่งเล่น',
+        category: 'cleaning',
+        icon: '🧹',
+        color: 'amber',
+        scheduledTime: '16:30',
+        order: 4,
+        isDailyRoutine: true,
+        starsReward: 1,
+        status: 'pending',
+        notes: 'กวาดตามซอกโต๊ะและใต้โซฟา',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  } else {
+    finalProfile = {
+      ...profile,
+      nickname: heroName,
+      parentPin: undefined,
+    };
+    finalTasks = tasks;
+  }
 
   const payload: UserTokenPayload = {
-    version: 1,
+    version: 2,
     heroName,
     userName: heroName,
     passcode,
     password: passcode,
     validUntil: validUntilMs,
     validUntilFormatted: formatThaiDate(validDate),
-    profile: {
-      ...profile,
-      nickname: heroName,
-      // Clear parent PIN from user token for security
-      parentPin: undefined,
-    },
-    tasks,
     createdAt: now,
+    createdAtFormatted: formatThaiDate(new Date(now)),
+    isFreshUser: clearDataForNewUser,
+    profile: finalProfile,
+    tasks: finalTasks,
   };
 
   const jsonStr = JSON.stringify(payload);
-  // Base64 encode safe for URL
   const token = btoa(encodeURIComponent(jsonStr));
 
-  // Save to list of active tokens in admin storage
+  // บันทึกลงตารางรายการ User Tokens ใน Admin Storage
   saveActiveUserToken(payload);
 
   return { token, payload };

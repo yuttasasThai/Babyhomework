@@ -130,6 +130,69 @@ class SoundManager {
       // Fallback
     }
   }
+  playWarningAlert() {
+    if (!this.enabled) return;
+    try {
+      const ctx = this.getContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Two-tone warning beep
+      [0, 0.15, 0.3].forEach((offset) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, now + offset); // A5
+        osc.frequency.setValueAtTime(659.25, now + offset + 0.07); // E5
+
+        gain.gain.setValueAtTime(0.2, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + offset + 0.14);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.14);
+      });
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  }
+
+  speakThai(text: string) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'th-TH';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.05;
+
+      const voices = window.speechSynthesis.getVoices();
+      const thaiVoice = voices.find((v) => v.lang === 'th-TH' || v.lang.startsWith('th'));
+      if (thaiVoice) {
+        utterance.voice = thaiVoice;
+      }
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('Speech synthesis failed:', err);
+    }
+  }
+
+  playExpiredUserVoiceAlert(userName: string) {
+    this.playWarningAlert();
+    setTimeout(() => {
+      this.speakThai(`ยูสเซอร์ ${userName} หมดอายุแล้วค่ะ`);
+    }, 500);
+  }
+
+  playContactAdminVoice() {
+    this.playWarningAlert();
+    setTimeout(() => {
+      this.speakThai('หมดอายุใช้งาน ต้องการใช้งาน ติดต่อ admin ช่างหน่อยชุมแพ 099-2256601 ค่ะ');
+    }, 500);
+  }
 }
 
 export const soundManager = new SoundManager();
+
