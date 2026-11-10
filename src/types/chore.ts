@@ -49,6 +49,10 @@ export interface ChoreTask {
   parentBonusStars?: number;
   parentFeedback?: string;
   shareCode?: string;
+  submissionPartStars?: number; // คะแนนส่วนที่ 1 (งานที่ส่ง)
+  chatVerifiedPartStars?: number; // คะแนนส่วนที่ 2 (ตรวจงานผ่าน LINE/Messenger)
+  chatPlatform?: 'line' | 'messenger';
+  isScoreFullyCompleted?: boolean;
 }
 
 export interface ChoreLog {
@@ -67,6 +71,9 @@ export interface ChoreLog {
   parentApprovedAt?: string;
   parentBonusStars?: number;
   parentFeedback?: string;
+  submissionPartStars?: number;
+  chatVerifiedPartStars?: number;
+  isScoreFullyCompleted?: boolean;
 }
 
 export interface HeroRankInfo {
