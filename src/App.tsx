@@ -41,7 +41,9 @@ import { LineGuideModal } from './components/LineGuideModal';
 import { ParentPinModal } from './components/ParentPinModal';
 import { SharePlayerLinkModal } from './components/SharePlayerLinkModal';
 import { UserLoginModal } from './components/UserLoginModal';
+import { HeroBootScreen } from './components/HeroBootScreen';
 import { alarmManager } from './utils/alarmAudio';
+import { APP_REVISION } from './config/revision';
 
 import { Plus, Filter, Sparkles, CheckCircle2, ListTodo, Calendar, Award, MessageCircle } from 'lucide-react';
 
@@ -71,21 +73,23 @@ export default function App() {
   const [renewalMessage, setRenewalMessage] = useState<string | null>(null);
   const [welcomeBanner, setWelcomeBanner] = useState<string | null>(null);
 
-  // User Login State (Requirement 1: link user ต้อง login ทุกครั้งก่อนเข้าโดยใส่รหัสผ่าน)
+  // Requirement 2: ลิงก์ user การเข้าใช้งานให้ใส่รหัสทุกครั้ง
   const [isUserLoggedIn, setIsUserLoggedIn] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const token = params.get('playerToken');
       if (token) {
-        const decoded = decodeUserToken(token);
-        if (decoded.payload && !decoded.isExpired) {
-          const session = sessionStorage.getItem(`chore_user_session_${decoded.payload.passcode}`);
-          return session === 'authenticated';
-        }
+        return false; // บังคับให้ใส่รหัสผ่านทุกครั้งเมื่อเปิดลิงก์เข้ามา
       }
     }
     return true;
   });
+
+  // Requirement 3: หน้า Boot Screen เวลาจะเข้าใช้งานหลังใส่รหัสผ่าน
+  const [showBootScreen, setShowBootScreen] = useState<boolean>(false);
+
+  // First-time onboarding for user link (สร้างชื่อ & เลือกโปรไฟล์ก่อนถึงจะเริ่มต้นกำหนดภารกิจได้)
+  const [isFirstTimeOnboarding, setIsFirstTimeOnboarding] = useState<boolean>(false);
 
   // Modals state
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
@@ -134,8 +138,8 @@ export default function App() {
             soundManager.playContactAdminVoice();
           } else {
             setIsPlayerOnlyMode(true);
-            const session = sessionStorage.getItem(`chore_user_session_${decoded.payload.passcode}`);
-            setIsUserLoggedIn(session === 'authenticated');
+            // Requirement 2: ลิงก์ user การเข้าใช้งานให้ใส่รหัสทุกครั้ง
+            setIsUserLoggedIn(false);
 
             // Requirement 1: เคลียร์ล้างข้อมูลตั้งต้นเพื่อให้ user ที่ใช้งานสร้างข้อมูลของตัวเอง
             const lastActiveToken = localStorage.getItem('chore_hero_active_player_token');
@@ -152,10 +156,6 @@ export default function App() {
             if (decoded.payload.tasks && decoded.payload.tasks.length > 0) {
               setTasks(decoded.payload.tasks);
               saveTasks(decoded.payload.tasks);
-            }
-            if (session === 'authenticated') {
-              setWelcomeBanner(`🌟 ยินดีต้อนรับฮีโร่ ${decoded.payload.heroName}! ใช้งานได้ถึง ${decoded.payload.validUntilFormatted}`);
-              setTimeout(() => setWelcomeBanner(null), 9000);
             }
           }
         }
@@ -260,11 +260,21 @@ export default function App() {
 
   // Safe handler to open Manage Chores (Requirement 3: link user ตั้งค่าปรับเพิ่มภารกิจได้เลยโดยไม่ต้องใส่รหัสผ่าน)
   const handleOpenManageChores = () => {
+    // หากเป็นการใช้งานครั้งแรก ต้องสร้างชื่อและเลือกโปรไฟล์ก่อนถึงจะเริ่มต้นกำหนดภารกิจได้
+    if (tokenPayload && isFirstTimeOnboarding) {
+      setShowOnboarding(true);
+      return;
+    }
     setShowAddChore(true);
   };
 
   // Safe handler to open Queue Settings (Requirement 3: link user จัดคิวเวลาเตือนได้เลยโดยไม่ต้องใส่รหัสผ่าน)
   const handleOpenQueueSettings = () => {
+    // หากเป็นการใช้งานครั้งแรก ต้องสร้างชื่อและเลือกโปรไฟล์ก่อนถึงจะเริ่มต้นกำหนดภารกิจได้
+    if (tokenPayload && isFirstTimeOnboarding) {
+      setShowOnboarding(true);
+      return;
+    }
     setShowQueueModal(true);
   };
 
@@ -595,6 +605,35 @@ export default function App() {
             />
           </div>
         )}
+
+        {/* GitHub / Vercel Live Deployment Version Badge (แสดงเวอร์ชันบนหน้าหลักเพื่อให้ตรวจสอบได้ง่าย) */}
+        <footer className="pt-6 pb-2 text-center">
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 rounded-2xl bg-white/90 backdrop-blur-sm border border-slate-200/90 shadow-xs text-xs text-slate-600">
+            <span className="flex items-center gap-1.5 font-bold text-slate-800">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50" />
+              <span>เวอร์ชันระบบ:</span>
+              <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500 text-white font-mono font-black shadow-xs">
+                v{APP_REVISION.version}
+              </span>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="font-mono text-[11px] text-slate-600">
+              GitHub ➔ Vercel: <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">{APP_REVISION.revision}</span>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="text-[11px] text-slate-500">
+              อัปเดต: {APP_REVISION.releaseDate}
+            </span>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={handleOpenAdminHub}
+              className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+            >
+              ตรวจสอบไฟล์ซอร์สโค้ด
+            </button>
+          </div>
+        </footer>
       </main>
 
       {/* Daily Chore Missions Modal (Opens when tapping Treasure Map) */}
@@ -634,12 +673,37 @@ export default function App() {
         }}
       />
 
-      {/* Onboarding Profile Modal */}
+      {/* Onboarding Profile Modal (สร้างชื่อ & เลือกโปรไฟล์ก่อนถึงจะเริ่มต้นกำหนดภารกิจได้) */}
       <HeroOnboardingModal
         isOpen={showOnboarding}
-        onClose={() => setShowOnboarding(false)}
+        onClose={() => {
+          if (!isFirstTimeOnboarding) {
+            setShowOnboarding(false);
+          }
+        }}
         profile={profile}
-        onSave={(updated) => setProfile(updated)}
+        isMandatoryFirstTime={isFirstTimeOnboarding}
+        onSave={(updated) => {
+          setProfile(updated);
+          saveProfile(updated);
+          if (tokenPayload) {
+            localStorage.setItem(`chore_hero_onboarding_completed_${tokenPayload.passcode}`, 'true');
+          }
+          if (isFirstTimeOnboarding) {
+            setIsFirstTimeOnboarding(false);
+            setShowOnboarding(false);
+            fireHeroConfetti();
+            soundManager.playSuccessFanfare();
+            setWelcomeBanner(`🎉 ยินดีต้อนรับฮีโร่ ${updated.nickname}! สร้างโปรไฟล์สำเร็จแล้ว เริ่มต้นกำหนดภารกิจกันเลย 🚀`);
+            setTimeout(() => setWelcomeBanner(null), 7000);
+            // เมื่อสร้างชื่อและเลือกโปรไฟล์เรียบร้อยแล้ว ให้เริ่มต้นกำหนดภารกิจได้ทันที
+            setTimeout(() => {
+              setShowAddChore(true);
+            }, 400);
+          } else {
+            setShowOnboarding(false);
+          }
+        }}
       />
 
       {/* Add Chore Modal */}
@@ -833,18 +897,36 @@ export default function App() {
         </div>
       )}
 
-      {/* Requirement 1: User Login Modal before entering user link */}
+      {/* Requirement 1 & 2: User Login Modal before entering user link */}
       <UserLoginModal
-        isOpen={Boolean(tokenPayload && !isTokenExpired && !isUserLoggedIn)}
+        isOpen={Boolean(tokenPayload && !isTokenExpired && !isUserLoggedIn && !showBootScreen)}
         tokenPayload={tokenPayload}
         profile={profile}
         onSuccessLogin={() => {
-          if (tokenPayload) {
-            sessionStorage.setItem(`chore_user_session_${tokenPayload.passcode}`, 'authenticated');
-          }
+          // Requirement 3: หลังใส่รหัสผ่านสร้างหน้า บูท screen เวลาจะเข้าใช้งาน
+          setShowBootScreen(true);
+        }}
+      />
+
+      {/* Requirement 3: Hero Boot Screen หลังใส่รหัสผ่านสำเร็จ */}
+      <HeroBootScreen
+        isOpen={showBootScreen}
+        profile={profile}
+        onBootComplete={() => {
+          setShowBootScreen(false);
           setIsUserLoggedIn(true);
-          setWelcomeBanner(`🌟 ยินดีต้อนรับฮีโร่ ${tokenPayload?.heroName || profile.nickname}! เข้าสู่ระบบสำเร็จ`);
-          setTimeout(() => setWelcomeBanner(null), 6000);
+
+          if (tokenPayload) {
+            // เช็คว่าเป็นการใช้งานครั้งแรกหรือไม่ (สร้างชื่อและเลือกโปรไฟล์ก่อนถึงจะเริ่มต้นกำหนดภารกิจได้)
+            const isCompleted = localStorage.getItem(`chore_hero_onboarding_completed_${tokenPayload.passcode}`) === 'true';
+            if (!isCompleted) {
+              setIsFirstTimeOnboarding(true);
+              setShowOnboarding(true);
+            } else {
+              setWelcomeBanner(`🌟 ยินดีต้อนรับฮีโร่ ${profile.nickname || tokenPayload?.heroName}! เข้าสู่ระบบสำเร็จ`);
+              setTimeout(() => setWelcomeBanner(null), 6000);
+            }
+          }
         }}
       />
 
