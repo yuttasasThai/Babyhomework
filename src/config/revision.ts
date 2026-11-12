@@ -1,9 +1,9 @@
 export const APP_REVISION = {
-  version: '1.8.0',
-  revision: 'rev-20261112-01-boot-screen-and-clean-passcode-gate',
+  version: '1.9.0',
+  revision: 'rev-20261112-02-short-user-link-fix-boot-clear-chores',
   releaseDate: '2026-11-12',
-  sourceName: 'little-hero-chore-quest-v1.8.0-boot-screen-clean-passcode',
-  buildTag: 'v1.8.0-boot-screen-clean-passcode-verified',
+  sourceName: 'little-hero-chore-quest-v1.9.0-short-link-boot-fix',
+  buildTag: 'v1.9.0-short-link-boot-fix-verified',
 };
 
 export function exportSourceBackupData(allData: Record<string, unknown>) {
