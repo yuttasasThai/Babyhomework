@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HeroProfile } from '../types/chore';
 import { soundManager } from '../utils/soundEffects';
 import { fireHeroConfetti } from '../utils/confetti';
-import { Sparkles, ShieldCheck, Zap, Star, MapPin, Camera, CheckCircle2, Rocket } from 'lucide-react';
+import { Sparkles, ShieldCheck, Zap, MapPin, Camera, CheckCircle2, Rocket } from 'lucide-react';
 import { APP_REVISION } from '../config/revision';
 
 interface Props {
@@ -26,36 +26,53 @@ export const HeroBootScreen: React.FC<Props> = ({
 }) => {
   const [progress, setProgress] = useState<number>(0);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
-  const [isFinishing, setIsFinishing] = useState<boolean>(false);
+
+  // Refs prevent re-render cleanup from cancelling the completion timeout!
+  const hasTriggeredCompleteRef = useRef<boolean>(false);
+  const onBootCompleteRef = useRef(onBootComplete);
+  onBootCompleteRef.current = onBootComplete;
 
   useEffect(() => {
     if (!isOpen) {
       setProgress(0);
       setCurrentStepIndex(0);
-      setIsFinishing(false);
+      hasTriggeredCompleteRef.current = false;
       return;
     }
 
+    hasTriggeredCompleteRef.current = false;
+    setProgress(0);
+    setCurrentStepIndex(0);
     soundManager.playStarPop();
 
-    // Increment progress smoothly over ~1.8 - 2.0 seconds
     const interval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
           return 100;
         }
-        // Advance progress
-        const next = Math.min(100, prev + Math.floor(Math.random() * 8) + 6);
-        return next;
+        return Math.min(100, prev + Math.floor(Math.random() * 10) + 8);
       });
-    }, 70);
+    }, 65);
 
-    return () => clearInterval(interval);
+    // Safety hard-fallback timer: guarantee boot screen NEVER hangs longer than 2.8s
+    const safetyTimer = setTimeout(() => {
+      if (!hasTriggeredCompleteRef.current) {
+        hasTriggeredCompleteRef.current = true;
+        onBootCompleteRef.current();
+      }
+    }, 2800);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(safetyTimer);
+    };
   }, [isOpen]);
 
-  // Update step text based on progress
+  // Update step text & trigger completion safely when progress hits 100%
   useEffect(() => {
+    if (!isOpen) return;
+
     if (progress < 25) {
       setCurrentStepIndex(0);
     } else if (progress < 50) {
@@ -68,16 +85,19 @@ export const HeroBootScreen: React.FC<Props> = ({
       setCurrentStepIndex(4);
     }
 
-    if (progress >= 100 && !isFinishing) {
-      setIsFinishing(true);
+    if (progress >= 100 && !hasTriggeredCompleteRef.current) {
+      hasTriggeredCompleteRef.current = true;
       soundManager.playSuccessFanfare();
-      fireHeroConfetti();
-      const timer = setTimeout(() => {
-        onBootComplete();
-      }, 550);
-      return () => clearTimeout(timer);
+      try {
+        fireHeroConfetti();
+      } catch {
+        // ignore confetti error in restricted webviews
+      }
+      setTimeout(() => {
+        onBootCompleteRef.current();
+      }, 450);
     }
-  }, [progress, isFinishing, onBootComplete]);
+  }, [isOpen, progress]);
 
   if (!isOpen) return null;
 
@@ -86,15 +106,14 @@ export const HeroBootScreen: React.FC<Props> = ({
   const childName = profile.nickname || 'ฮีโร่ตัวจิ๋ว';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950 text-white animate-fade-in overflow-hidden select-none">
+    <div className="fixed inset-0 w-full h-full z-50 flex items-center justify-center p-4 bg-slate-950 text-white overflow-hidden select-none">
       {/* Dynamic Background Glows */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.08)_0%,transparent_70%)]" />
+      <div className="pointer-events-none absolute -top-32 -left-32 w-80 h-80 bg-amber-500/20 rounded-full blur-3xl animate-pulse" />
+      <div className="pointer-events-none absolute -bottom-32 -right-32 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl animate-pulse" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.08)_0%,transparent_70%)]" />
 
-      {/* Main Boot Terminal Card */}
-      <div className="relative max-w-md w-full bg-slate-900/90 border-2 border-amber-400/40 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl text-center space-y-6">
-        
+      {/* Main Boot Terminal Card - strictly centered with mx-auto */}
+      <div className="relative mx-auto max-w-sm sm:max-w-md w-full bg-slate-900/95 border-2 border-amber-400/40 rounded-3xl p-5 sm:p-8 shadow-2xl backdrop-blur-xl text-center space-y-5">
         {/* Top Header Tag */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3 text-xs">
           <div className="flex items-center gap-2 text-amber-400 font-mono font-bold tracking-wider">
@@ -140,7 +159,7 @@ export const HeroBootScreen: React.FC<Props> = ({
         </div>
 
         {/* Progress Bar & Percentage */}
-        <div className="space-y-2 pt-2">
+        <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between text-xs font-mono">
             <span className="text-slate-400 flex items-center gap-1">
               <StepIcon className="w-3.5 h-3.5 text-amber-400 animate-spin" />
@@ -161,7 +180,7 @@ export const HeroBootScreen: React.FC<Props> = ({
         </div>
 
         {/* Dynamic Boot Step Message Box */}
-        <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 text-xs text-amber-200/90 font-medium flex items-center justify-center gap-2 min-h-[48px] animate-fade-in">
+        <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 text-xs text-amber-200/90 font-medium flex items-center justify-center gap-2 min-h-[44px]">
           <StepIcon className="w-4 h-4 text-amber-400 shrink-0" />
           <span className="line-clamp-1">{currentStep.text}</span>
         </div>
@@ -171,16 +190,17 @@ export const HeroBootScreen: React.FC<Props> = ({
           <button
             type="button"
             onClick={() => {
+              if (!hasTriggeredCompleteRef.current) {
+                hasTriggeredCompleteRef.current = true;
+              }
               soundManager.playSuccessFanfare();
-              fireHeroConfetti();
-              onBootComplete();
+              onBootCompleteRef.current();
             }}
-            className="text-[11px] text-slate-500 hover:text-slate-300 transition underline underline-offset-4"
+            className="text-xs text-slate-400 hover:text-white transition underline underline-offset-4 cursor-pointer"
           >
             กดข้ามเพื่อเริ่มทันที ➔
           </button>
         </div>
-
       </div>
     </div>
   );
