@@ -1,7 +1,8 @@
 import React from 'react';
 import { HeroProfile } from '../types/chore';
-import { Volume2, VolumeX, ShieldCheck, UserCheck, Share2, Lock, Download, KeyRound, LogOut } from 'lucide-react';
+import { Volume2, VolumeX, ShieldCheck, UserCheck, Share2, Lock, Download, KeyRound, LogOut, GitBranch } from 'lucide-react';
 import { soundManager } from '../utils/soundEffects';
+import { APP_REVISION } from '../config/revision';
 
 interface Props {
   profile: HeroProfile;
@@ -44,9 +45,16 @@ export const HeaderHeroBar: React.FC<Props> = ({
                 ⭐
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-lg md:text-xl font-bold tracking-tight text-slate-900 font-display whitespace-nowrap block">
                     ฮีโร่ตัวจิ๋วพิชิตงานบ้าน
+                  </span>
+                  <span
+                    title={`เวอร์ชัน GitHub/Vercel ล่าสุด: ${APP_REVISION.revision}`}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs"
+                  >
+                    <GitBranch className="w-2.5 h-2.5 text-emerald-700" />
+                    v{APP_REVISION.version}
                   </span>
                   {isPlayerOnlyMode && (
                     <span className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
@@ -54,9 +62,14 @@ export const HeaderHeroBar: React.FC<Props> = ({
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] text-amber-700/80 font-medium tracking-wide uppercase hidden sm:block">
-                  Little Chore Hero Quest
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-amber-700/80 font-medium tracking-wide uppercase hidden sm:block">
+                    Little Chore Hero Quest
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400 hidden sm:block">
+                    ({APP_REVISION.revision})
+                  </span>
+                </div>
               </div>
             </button>
           </div>
@@ -128,7 +141,7 @@ export const HeaderHeroBar: React.FC<Props> = ({
                   soundManager.playStarPop();
                   onOpenShareLink();
                 }}
-                title="ใส่รหัสผ่านแอดมิน (099-2252601) เพื่อเข้าสู่เมนูแอดมิน"
+                title="ใส่รหัสผ่านแอดมินเพื่อเข้าสู่เมนูแอดมิน"
                 className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 active:scale-95"
               >
                 <Lock className="w-3.5 h-3.5 text-amber-300" />

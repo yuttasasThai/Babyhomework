@@ -23,6 +23,7 @@ interface Props {
   onClose: () => void;
   profile: HeroProfile;
   onSave: (updated: HeroProfile) => void;
+  isMandatoryFirstTime?: boolean;
 }
 
 export const HeroOnboardingModal: React.FC<Props> = ({
@@ -30,6 +31,7 @@ export const HeroOnboardingModal: React.FC<Props> = ({
   onClose,
   profile,
   onSave,
+  isMandatoryFirstTime = false,
 }) => {
   const [nickname, setNickname] = useState(profile.nickname || 'น้องอาชิ');
   const [age, setAge] = useState<number>(profile.age || 7);
@@ -67,8 +69,17 @@ export const HeroOnboardingModal: React.FC<Props> = ({
       stopSelfieWebcam();
       setIsProcessingPhoto(false);
       setPhotoError(null);
+    } else {
+      setNickname(profile.nickname || '');
+      setAge(profile.age || 7);
+      setGender(profile.gender || 'boy');
+      setSelectedAvatarId(profile.avatarId || HERO_AVATARS[0].id);
+      setCustomPhotoUrl(profile.isCustomPhoto ? profile.avatarUrl : null);
+      setAvatarMode(profile.isCustomPhoto ? 'camera' : 'cartoon');
+      setDreamReward(profile.dreamReward || 'กินไอศกรีม 🍨');
+      setDreamRewardStars(profile.dreamRewardStars || 15);
     }
-  }, [isOpen, stopSelfieWebcam]);
+  }, [isOpen, profile, stopSelfieWebcam]);
 
   if (!isOpen) return null;
 
@@ -235,21 +246,31 @@ export const HeroOnboardingModal: React.FC<Props> = ({
         {/* Header banner */}
         <div className="bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 p-5 sm:p-6 text-white text-center relative shrink-0">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl mb-2 text-2xl shadow-inner">
-            🦸‍♂️
+            {isMandatoryFirstTime ? '🌟' : '🦸‍♂️'}
           </div>
+          {isMandatoryFirstTime && (
+            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-amber-100 text-xs font-bold uppercase tracking-wider mb-1">
+              <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+              <span>ยินดีต้อนรับฮีโร่ใหม่ · ใช้งานครั้งแรก</span>
+            </div>
+          )}
           <h2 className="text-xl sm:text-2xl font-black tracking-tight font-display">
-            ตั้งค่าโปรไฟล์ผู้พิชิตภารกิจ
+            {isMandatoryFirstTime ? 'สร้างชื่อ & เลือกรูปโปรไฟล์ฮีโร่' : 'ตั้งค่าโปรไฟล์ผู้พิชิตภารกิจ'}
           </h2>
-          <p className="text-amber-50 text-xs sm:text-sm mt-0.5">
-            ระบุชื่อ อายุ และเลือกรูปการ์ตูนหรือถ่ายรูปตัวเองเพื่อแสดงบนโปรไฟล์
+          <p className="text-amber-50 text-xs sm:text-sm mt-0.5 max-w-sm mx-auto">
+            {isMandatoryFirstTime
+              ? 'กรุณาสร้างชื่อและเลือกรูปโปรไฟล์ของคุณให้เรียบร้อย เพื่อเริ่มต้นกำหนดภารกิจพิชิตงานบ้าน!'
+              : 'ระบุชื่อ อายุ และเลือกรูปการ์ตูนหรือถ่ายรูปตัวเองเพื่อแสดงบนโปรไฟล์'}
           </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!isMandatoryFirstTime && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute top-4 right-4 p-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Scrollable form */}
@@ -557,19 +578,23 @@ export const HeroOnboardingModal: React.FC<Props> = ({
 
           {/* Action buttons */}
           <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="py-2.5 px-4 rounded-xl text-slate-600 hover:bg-slate-100 font-bold text-sm transition"
-            >
-              ยกเลิก
-            </button>
+            {!isMandatoryFirstTime && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="py-2.5 px-4 rounded-xl text-slate-600 hover:bg-slate-100 font-bold text-sm transition"
+              >
+                ยกเลิก
+              </button>
+            )}
             <button
               type="submit"
-              className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-sm shadow-md shadow-amber-500/25 transition active:scale-95 font-display flex items-center gap-1.5"
+              className={`py-3 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-sm shadow-md shadow-amber-500/25 transition active:scale-95 font-display flex items-center justify-center gap-2 ${
+                isMandatoryFirstTime ? 'w-full text-base' : ''
+              }`}
             >
               <Check className="w-4 h-4" />
-              <span>บันทึกโปรไฟล์</span>
+              <span>{isMandatoryFirstTime ? '🚀 บันทึกโปรไฟล์ & เริ่มต้นกำหนดภารกิจ' : 'บันทึกโปรไฟล์'}</span>
             </button>
           </div>
         </form>

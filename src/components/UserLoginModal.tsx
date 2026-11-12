@@ -91,7 +91,7 @@ export const UserLoginModal: React.FC<Props> = ({
               <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1">
                   <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-                  <span>รหัสผ่านเข้าใช้งาน (Passcode):</span>
+                  <span>รหัสผ่านเข้าใช้งาน:</span>
                 </span>
                 <button
                   type="button"
@@ -113,7 +113,8 @@ export const UserLoginModal: React.FC<Props> = ({
                     setPassword(e.target.value.toUpperCase());
                   }}
                   autoFocus
-                  placeholder="กรอกรหัสผ่านของคุณ"
+                  autoComplete="new-password"
+                  placeholder="••••••••"
                   className="w-full py-3 px-4 rounded-2xl border-2 border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none text-center font-mono font-black text-lg tracking-widest text-slate-800 bg-slate-50 transition"
                 />
               </div>

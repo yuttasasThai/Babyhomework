@@ -160,6 +160,9 @@ export const SharePlayerLinkModal: React.FC<Props> = ({
       true // เคลียร์ล้างข้อมูลทั้งหมดเพื่อให้ user ที่ใช้งานสร้างข้อมูลของตัวเอง
     );
 
+    // รีเซ็ตสถานะ onboarding เพื่อให้ user ที่ได้รับลิงก์สร้างชื่อและเลือกโปรไฟล์ในครั้งแรก
+    localStorage.removeItem(`chore_hero_onboarding_completed_${payload.passcode}`);
+
     const fullLink = `${currentOrigin}?playerToken=${token}`;
     setLastGeneratedLink(fullLink);
     setLastGeneratedPayload(payload);

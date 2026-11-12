@@ -17,7 +17,7 @@ export const ParentPinModal: React.FC<Props> = ({
   correctPin,
   onSuccess,
   title = 'ล็อกความปลอดภัยโหมดแอดมิน / ผู้ปกครอง',
-  description = 'กรุณาใส่รหัสผ่านแอดมิน (รหัสแอดมิน: 099-2252601)',
+  description = 'กรุณาใส่รหัสผ่านแอดมินเพื่อเข้าสู่ระบบ',
 }) => {
   const [password, setPassword] = useState<string>('');
   const [isError, setIsError] = useState<boolean>(false);
