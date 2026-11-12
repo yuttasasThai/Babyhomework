@@ -57,11 +57,16 @@ export default function App() {
   const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [isParentMode, setIsParentMode] = useState<boolean>(false);
 
-  // Kid / Player mode detector: ?mode=player prevents admin access without PIN
+  // Kid / Player mode detector: ?mode=player or ?u= or ?playerToken= prevents admin access without PIN
   const [isPlayerOnlyMode, setIsPlayerOnlyMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      return params.get('mode') === 'player' || params.get('mode') === 'kid' || Boolean(params.get('playerToken'));
+      return (
+        params.get('mode') === 'player' ||
+        params.get('mode') === 'kid' ||
+        Boolean(params.get('u')) ||
+        Boolean(params.get('playerToken'))
+      );
     }
     return false;
   });
@@ -77,7 +82,7 @@ export default function App() {
   const [isUserLoggedIn, setIsUserLoggedIn] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const token = params.get('playerToken');
+      const token = params.get('u') || params.get('playerToken');
       if (token) {
         return false; // บังคับให้ใส่รหัสผ่านทุกครั้งเมื่อเปิดลิงก์เข้ามา
       }
@@ -124,11 +129,11 @@ export default function App() {
     }
   }, [tasks]);
 
-  // Check URL query for ?playerToken=<token> with expiration & remote phone sync
+  // Check URL query for ?u=<token> (short link) or ?playerToken=<token> (legacy)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const token = params.get('playerToken');
+      const token = params.get('u') || params.get('playerToken');
       if (token) {
         const decoded = decodeUserToken(token);
         if (decoded.payload) {
@@ -141,21 +146,27 @@ export default function App() {
             // Requirement 2: ลิงก์ user การเข้าใช้งานให้ใส่รหัสทุกครั้ง
             setIsUserLoggedIn(false);
 
-            // Requirement 1: เคลียร์ล้างข้อมูลตั้งต้นเพื่อให้ user ที่ใช้งานสร้างข้อมูลของตัวเอง
+            // Requirement 2 (ล่าสุด): เคลียร์ภารกิจเก่าและประวัติเก่าออกทั้งหมดเมื่อใช้งานลิงก์ user ครั้งแรก
+            const tokenKey = `${decoded.payload.passcode}_${decoded.payload.createdAt}`;
             const lastActiveToken = localStorage.getItem('chore_hero_active_player_token');
-            if (lastActiveToken !== token) {
-              localStorage.setItem('chore_hero_active_player_token', token);
+            if (lastActiveToken !== tokenKey) {
+              localStorage.setItem('chore_hero_active_player_token', tokenKey);
+              saveTasks([]);
+              setTasks([]);
               saveLogs([]);
               setLogs([]);
-            }
+              const resetRewards = getStoredRewards().map((r) => ({
+                ...r,
+                isClaimed: false,
+                claimedAt: undefined,
+              }));
+              saveRewards(resetRewards);
+              setRewards(resetRewards);
 
-            if (decoded.payload.profile) {
-              setProfile(decoded.payload.profile);
-              saveProfile(decoded.payload.profile);
-            }
-            if (decoded.payload.tasks && decoded.payload.tasks.length > 0) {
-              setTasks(decoded.payload.tasks);
-              saveTasks(decoded.payload.tasks);
+              if (decoded.payload.profile) {
+                setProfile(decoded.payload.profile);
+                saveProfile(decoded.payload.profile);
+              }
             }
           }
         }
@@ -687,7 +698,7 @@ export default function App() {
           setProfile(updated);
           saveProfile(updated);
           if (tokenPayload) {
-            localStorage.setItem(`chore_hero_onboarding_completed_${tokenPayload.passcode}`, 'true');
+            localStorage.setItem(`chore_hero_onboarding_completed_${tokenPayload.passcode}_${tokenPayload.createdAt}`, 'true');
           }
           if (isFirstTimeOnboarding) {
             setIsFirstTimeOnboarding(false);
@@ -918,7 +929,8 @@ export default function App() {
 
           if (tokenPayload) {
             // เช็คว่าเป็นการใช้งานครั้งแรกหรือไม่ (สร้างชื่อและเลือกโปรไฟล์ก่อนถึงจะเริ่มต้นกำหนดภารกิจได้)
-            const isCompleted = localStorage.getItem(`chore_hero_onboarding_completed_${tokenPayload.passcode}`) === 'true';
+            const isCompleted =
+              localStorage.getItem(`chore_hero_onboarding_completed_${tokenPayload.passcode}_${tokenPayload.createdAt}`) === 'true';
             if (!isCompleted) {
               setIsFirstTimeOnboarding(true);
               setShowOnboarding(true);
