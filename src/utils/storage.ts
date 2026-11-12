@@ -317,9 +317,65 @@ export function formatThaiDate(date: Date): string {
   return `${date.getDate()} ${months[date.getMonth()]} ${buddhistYear} เวลา ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')} น.`;
 }
 
+function encodeUtf8Base64Url(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeUtf8Base64Url(token: string): string {
+  const base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+  const padLen = (4 - (base64.length % 4)) % 4;
+  const padded = base64 + '='.repeat(padLen);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Encodes a UserTokenPayload into a compact, short URL-safe token (~80-100 chars)
+ */
+export function encodeCompactUserToken(payload: UserTokenPayload): string {
+  const compact = {
+    n: payload.userName || payload.heroName,
+    p: payload.passcode,
+    v: Math.floor(payload.validUntil / 1000),
+    c: Math.floor(payload.createdAt / 1000),
+    f: payload.isFreshUser ? 1 : 0,
+  };
+  return encodeUtf8Base64Url(JSON.stringify(compact));
+}
+
+function buildFreshUserProfile(heroName: string, now: number): HeroProfile {
+  return {
+    id: `hero_user_${now}`,
+    nickname: heroName,
+    age: 7,
+    gender: 'boy',
+    avatarUrl: HERO_AVATARS[0].image,
+    avatarId: HERO_AVATARS[0].id,
+    isCustomPhoto: false,
+    heroRankLevel: 1, // ระดับขั้นที่ 1
+    totalStars: 0, // 0 ดาว สะสมใหม่ด้วยตัวเอง
+    currentStreak: 0, // เริ่มสถิติใหม่ 0 วัน
+    lastActiveDate: new Date().toISOString().split('T')[0],
+    dreamReward: '', // ให้ผู้ใช้ตั้งของรางวัลความฝันของตนเอง
+    dreamRewardStars: 20,
+    soundEnabled: true,
+    dailyTaskTarget: 3,
+    parentPin: undefined, // ล็อกโหมดแอดมิน
+  };
+}
+
 /**
  * Creates an encoded user token.
- * Requirement 1: เคลียร์ล้างข้อมูลทั้งหมดเพื่อให้ user ที่ใช้งานสร้างข้อมูลของตัวเอง
+ * Requirement 1 & 2: เคลียร์ล้างข้อมูลและภารกิจเก่าทั้งหมดออก (0 ภารกิจค้าง) และสร้างลิงก์แบบสั้น
  */
 export function createUserToken(
   profile: HeroProfile,
@@ -332,94 +388,18 @@ export function createUserToken(
 ): { token: string; payload: UserTokenPayload } {
   const now = Date.now();
   const validUntilMs = now + daysValid * 24 * 60 * 60 * 1000;
-  const passcode = customPassword || customPasscode || `HERO-${Math.floor(1000 + Math.random() * 9000)}`;
+  const passcode = (customPassword || customPasscode || '').trim();
   const validDate = new Date(validUntilMs);
   const heroName = (customUserName && customUserName.trim()) || 'ฮีโร่ตัวจิ๋ว';
 
-  // 1) เคลียร์ล้างข้อมูลเพื่อเริ่มใหม่สำหรับ User นี้
+  // 1) เคลียร์ล้างข้อมูลและภารกิจเก่าออกทั้งหมดสำหรับ User ใหม่
   let finalProfile: HeroProfile;
   let finalTasks: ChoreTask[];
 
   if (clearDataForNewUser) {
-    // ข้อมูลโปรไฟล์เริ่มต้นใหม่เอี่ยม: ดาว 0, ระดับขั้น 1, สถิติ 0 วัน, ให้สร้างข้อมูลเอง
-    finalProfile = {
-      id: `hero_user_${now}`,
-      nickname: heroName,
-      age: 7,
-      gender: 'boy',
-      avatarUrl: HERO_AVATARS[0].image,
-      avatarId: HERO_AVATARS[0].id,
-      isCustomPhoto: false,
-      heroRankLevel: 1, // ระดับขั้นที่ 1
-      totalStars: 0, // 0 ดาว สะสมใหม่ด้วยตัวเอง
-      currentStreak: 0, // เริ่มสถิติใหม่ 0 วัน
-      lastActiveDate: new Date().toISOString().split('T')[0],
-      dreamReward: '', // ให้ผู้ใช้ตั้งของรางวัลความฝันของตนเอง
-      dreamRewardStars: 20,
-      soundEnabled: true,
-      dailyTaskTarget: 3,
-      parentPin: undefined, // ล็อกโหมดแอดมิน
-    };
-
-    // ภารกิจตั้งต้นที่ยังไม่ได้ทำ (สถานะ pending ทั้งหมด ไม่มีรูปส่งงานค้าง)
-    finalTasks = [
-      {
-        id: `task-new-1`,
-        title: 'เก็บที่นอนให้เรียบร้อย',
-        category: 'bedroom',
-        icon: '🛏️',
-        color: 'teal',
-        scheduledTime: '07:30',
-        order: 1,
-        isDailyRoutine: true,
-        starsReward: 1,
-        status: 'pending',
-        notes: 'ดึงผ้าปูให้ตึง จัดหมอนให้ตรง',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `task-new-2`,
-        title: 'ล้างจานชามอาหารเช้า',
-        category: 'kitchen',
-        icon: '🍽️',
-        color: 'emerald',
-        scheduledTime: '08:30',
-        order: 2,
-        isDailyRoutine: true,
-        starsReward: 1,
-        status: 'pending',
-        notes: 'ใช้น้ำยาล้างจาน ล้างให้สะอาด',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `task-new-3`,
-        title: 'กรอกน้ำเย็นใส่ตู้เย็น',
-        category: 'kitchen',
-        icon: '💧',
-        color: 'blue',
-        scheduledTime: '13:00',
-        order: 3,
-        isDailyRoutine: true,
-        starsReward: 1,
-        status: 'pending',
-        notes: 'กรอกน้ำให้เต็มขวดและปิดฝาให้สนิท',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `task-new-4`,
-        title: 'กวาดห้องนั่งเล่น',
-        category: 'cleaning',
-        icon: '🧹',
-        color: 'amber',
-        scheduledTime: '16:30',
-        order: 4,
-        isDailyRoutine: true,
-        starsReward: 1,
-        status: 'pending',
-        notes: 'กวาดตามซอกโต๊ะและใต้โซฟา',
-        createdAt: new Date().toISOString(),
-      },
-    ];
+    finalProfile = buildFreshUserProfile(heroName, now);
+    // เคลียร์ภารกิจเก่าออกทั้งหมด เพื่อให้ User สร้างภารกิจของตนเองใหม่ตั้งแต่ 0
+    finalTasks = [];
   } else {
     finalProfile = {
       ...profile,
@@ -430,7 +410,7 @@ export function createUserToken(
   }
 
   const payload: UserTokenPayload = {
-    version: 2,
+    version: 3,
     heroName,
     userName: heroName,
     passcode,
@@ -444,8 +424,8 @@ export function createUserToken(
     tasks: finalTasks,
   };
 
-  const jsonStr = JSON.stringify(payload);
-  const token = btoa(encodeURIComponent(jsonStr));
+  // สร้าง Token แบบสั้นกะทัดรัด (?u=...)
+  const token = encodeCompactUserToken(payload);
 
   // บันทึกลงตารางรายการ User Tokens ใน Admin Storage
   saveActiveUserToken(payload);
@@ -454,7 +434,7 @@ export function createUserToken(
 }
 
 /**
- * Decodes and validates a user token
+ * Decodes and validates a user token (supports both compact v3 ?u= and legacy v2 ?playerToken=)
  */
 export function decodeUserToken(token: string): {
   payload: UserTokenPayload | null;
@@ -462,9 +442,51 @@ export function decodeUserToken(token: string): {
   timeLeftMs: number;
 } {
   try {
-    const jsonStr = decodeURIComponent(atob(token));
-    const payload: UserTokenPayload = JSON.parse(jsonStr);
+    let parsed: Record<string, unknown>;
+    try {
+      // Try compact v3 URL-safe UTF-8 Base64 first
+      const jsonStr = decodeUtf8Base64Url(token);
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // Fallback to legacy v2 format: btoa(encodeURIComponent(...))
+      const jsonStr = decodeURIComponent(atob(token));
+      parsed = JSON.parse(jsonStr);
+    }
+
     const now = Date.now();
+
+    // Check if compact v3 format: { n, p, v, c, f }
+    if (typeof parsed.n === 'string' && typeof parsed.p === 'string' && typeof parsed.v === 'number') {
+      const validUntilMs = parsed.v * 1000;
+      const createdAtMs = (typeof parsed.c === 'number' ? parsed.c : Math.floor(now / 1000)) * 1000;
+      const isFresh = parsed.f === 1;
+      const heroName = parsed.n;
+
+      const payload: UserTokenPayload = {
+        version: 3,
+        heroName,
+        userName: heroName,
+        passcode: parsed.p,
+        password: parsed.p,
+        validUntil: validUntilMs,
+        validUntilFormatted: formatThaiDate(new Date(validUntilMs)),
+        createdAt: createdAtMs,
+        createdAtFormatted: formatThaiDate(new Date(createdAtMs)),
+        isFreshUser: isFresh,
+        profile: buildFreshUserProfile(heroName, createdAtMs),
+        tasks: [], // ภารกิจว่างเปล่า ไม่มีภารกิจเก่าค้าง
+      };
+
+      const isExpired = now > payload.validUntil;
+      const timeLeftMs = Math.max(0, payload.validUntil - now);
+      return { payload, isExpired, timeLeftMs };
+    }
+
+    // Legacy v2 payload
+    const payload = parsed as unknown as UserTokenPayload;
+    if (payload.isFreshUser) {
+      payload.tasks = [];
+    }
     const isExpired = now > payload.validUntil;
     const timeLeftMs = Math.max(0, payload.validUntil - now);
 
