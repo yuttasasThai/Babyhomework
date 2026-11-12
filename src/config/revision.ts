@@ -1,9 +1,9 @@
 export const APP_REVISION = {
-  version: '1.6.0',
-  revision: 'rev-20261109-03-user-login-logout-messenger-2part-score',
-  releaseDate: '2026-11-09',
-  sourceName: 'little-hero-chore-quest-v1.6.0-user-login-logout-messenger-2part-score',
-  buildTag: 'v1.6.0-user-login-logout-messenger-2part-score-verified',
+  version: '1.8.0',
+  revision: 'rev-20261112-01-boot-screen-and-clean-passcode-gate',
+  releaseDate: '2026-11-12',
+  sourceName: 'little-hero-chore-quest-v1.8.0-boot-screen-clean-passcode',
+  buildTag: 'v1.8.0-boot-screen-clean-passcode-verified',
 };
 
 export function exportSourceBackupData(allData: Record<string, unknown>) {
